@@ -37,7 +37,7 @@ BEGIN_JUCE_MODULE_DECLARATION
 
   ID:               hi_faust
   vendor:           Hart Instruments
-  version:          4.1.0
+  version:          0.0.1
   name:             HISE Faust Integration
   description:      All processors for HISE
   website:          http://hise.audio
