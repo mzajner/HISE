@@ -502,7 +502,6 @@ public:
 		SaveButtonBounds,
 		MoreButtonBounds,
 		FavoriteButtonBounds,
-    FullPathFavorites,
 		numSpecialProperties
 	};
 
