@@ -1882,6 +1882,7 @@ size_t StructType::getMemberOffset(const Identifier& id) const
 		if (m->id == id)
 			return m->padding + m->offset;
 	}
+
 	jassertfalse;
 	return 0;
 }

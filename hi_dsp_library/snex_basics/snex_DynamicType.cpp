@@ -41,7 +41,7 @@ VariableStorage::VariableStorage(const block& b)
 	data.b.referTo(b);
 }
 
-VariableStorage::VariableStorage(const HiseEvent& m_)
+VariableStorage::VariableStorage(HiseEvent& m_)
 {
 	data.e = m_;
 }
@@ -252,7 +252,9 @@ snex::block VariableStorage::toBlock() const
 
 HiseEvent VariableStorage::toEvent() const
 {
-	if (getType() == Types::ID::Event)
+	auto t = getTypeValue();
+
+	if (t < (int)HiseEvent::Type::numTypes)
 		return data.e;
 
 	return HiseEvent();
