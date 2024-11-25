@@ -707,7 +707,7 @@ void MainController::UserPresetHandler::incPreset(bool next, bool stayInSameDire
             PresetBrowser::DataBaseHelpers::cleanFileList(mc, allPresets);
 			allPresets.sort();
 		}
-		else if(!FullInstrumentExpansion::isEnabled(mc) && mc->getExpansionHandler().getNumExpansions() > 0)
+		else if(mc->getExpansionHandler().getNumExpansions() > 0)
 		{
 			for(int i = 0; i < mc->getExpansionHandler().getNumExpansions(); i++)
 			{
@@ -739,26 +739,24 @@ void MainController::UserPresetHandler::incPreset(bool next, bool stayInSameDire
 		}
 	}
 
-	if (!FullInstrumentExpansion::isEnabled(mc))
+	if(currentlyLoadedFile.isAChildOf(expFolder))
 	{
-		if(currentlyLoadedFile.isAChildOf(expFolder))
+		for(int i = 0; i < mc->getExpansionHandler().getNumExpansions(); i++)
 		{
-			for(int i = 0; i < mc->getExpansionHandler().getNumExpansions(); i++)
+			auto e = mc->getExpansionHandler().getExpansion(i);
+			
+			if(currentlyLoadedFile.isAChildOf(e->getRootFolder()))
 			{
-				auto e = mc->getExpansionHandler().getExpansion(i);
-				
-				if(currentlyLoadedFile.isAChildOf(e->getRootFolder()))
-				{
-					mc->getExpansionHandler().setCurrentExpansion(e, sendNotificationAsync);
-					break;
-				}
+				mc->getExpansionHandler().setCurrentExpansion(e, sendNotificationAsync);
+				break;
 			}
 		}
-		else if (wasExpansionPreset)
-		{
-			mc->getExpansionHandler().setCurrentExpansion(nullptr, sendNotificationAsync);
-		}	
 	}
+	else if (wasExpansionPreset)
+	{
+		mc->getExpansionHandler().setCurrentExpansion(nullptr, sendNotificationAsync);
+	}
+
 
 	loadUserPreset(currentlyLoadedFile);
 }
