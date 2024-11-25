@@ -227,22 +227,7 @@ public:
             if(rootDialog.additionalChangeCallback)
             {
 	            if(cf)
-	            {
-		            auto r = cf(this, getValueFromGlobalState());
-
-                    
-
-                    if(!r.wasOk())
-                    {
-	                    setModalHelp(r.getErrorMessage());
-                        rootDialog.setCurrentErrorPage(this);
-                    }
-                    else
-                    {
-	                    rootDialog.setCurrentErrorPage(nullptr);
-                    }
-	            }
-	                
+	                cf(this, getValueFromGlobalState());
 
 	            rootDialog.callAdditionalChangeCallback();
             }
@@ -778,11 +763,6 @@ public:
 	void registerPlaceholder(const Identifier& typeId, const PlaceholderCreator& pc);
 
     PlaceholderContentBase* createDynamicPlaceholder(const var& infoObject);
-
-    void setAdditionalChangeCallback(const std::function<void()>& acf)
-    {
-	    additionalChangeCallback = acf;
-    }
 
 private:
 
