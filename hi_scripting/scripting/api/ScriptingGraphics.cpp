@@ -2862,11 +2862,6 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 	{
 		root.css.setAnimator(&root.animator);
 
-		auto cursor = ptr->getMouseCursor();
-
-		if(cursor != MouseCursor())
-			c->setMouseCursor(cursor);
-
 		Component::SafePointer<Component> safe(c);
 
 		auto updateProperty = [safe](Identifier v, var newValue)

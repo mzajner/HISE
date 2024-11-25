@@ -73,7 +73,20 @@ public:
 	static constexpr int AsyncMagicNumber = 912;
 	static constexpr int AsyncHiPriorityMagicNumber = 913;
 
-	static var getDispatchTypeMagicNumber(dispatch::DispatchType n);
+	static var getDispatchTypeMagicNumber(dispatch::DispatchType n)
+	{
+		using Type = dispatch::DispatchType;
+
+		switch(n)
+		{
+		case dispatch::dontSendNotification: return var(false);
+		case dispatch::sendNotification: return var(true);
+		case dispatch::sendNotificationSync: return var(SyncMagicNumber);
+		case dispatch::sendNotificationAsync: return var(AsyncMagicNumber);;
+		case dispatch::sendNotificationAsyncHiPriority: return var(AsyncHiPriorityMagicNumber);
+		default: return var(false);
+		}
+	}
 
 	static dispatch::DispatchType getDispatchType(const var& syncValue, bool getDontForFalse);
 
@@ -102,10 +115,8 @@ public:
 	static Colour getColourFromVar(const var& value);
 
 	static var convertStyleSheetProperty(const var& value, const String& type);
-
-	static StringArray getMouseCursorNames();
-
-	static MouseCursor::StandardCursorType getMouseCursorFromString(const String& name, Result* r = nullptr);
+	
+	
 
 	static Array<Identifier> getGlobalApiClasses();
 

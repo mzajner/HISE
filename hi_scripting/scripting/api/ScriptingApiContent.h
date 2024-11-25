@@ -1052,7 +1052,6 @@ public:
 			isMomentary,
 			enableMidiLearn,
             setValueOnClick,
-			mouseCursor,
 			numProperties
 		};
 
