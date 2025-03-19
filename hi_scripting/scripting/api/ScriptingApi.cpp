@@ -2126,8 +2126,9 @@ bool ScriptingApi::Engine::performUndoAction(var thisObject, var undoAction)
 
 int ScriptingApi::Engine::getNumPluginChannels() const
 {
-	return HISE_NUM_PLUGIN_CHANNELS;
+	return dynamic_cast<const AudioProcessor*>(getScriptProcessor()->getMainController_())->getMainBusNumOutputChannels(); // or getTotalNumOutputChannels();
 }
+
 
 var ScriptingApi::Engine::createFixObjectFactory(var layoutData)
 {
