@@ -2882,7 +2882,7 @@ void ScriptingObjects::ScriptingModulator::doubleClickCallback(const MouseEvent 
 
 Component* ScriptingObjects::ScriptingModulator::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mod);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mod);
 }
 
 void ScriptingObjects::ScriptingModulator::setIntensity(float newIntensity)
@@ -3176,7 +3176,7 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 
 Component* ScriptingObjects::ScriptingEffect::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, effect.get());
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, effect.get());
 }
 
 juce::String ScriptingObjects::ScriptingEffect::getId() const
@@ -3926,7 +3926,7 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 
 Component* ScriptingObjects::ScriptingSynth::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, synth);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, synth);
 }
 
 String ScriptingObjects::ScriptingSynth::getId() const
@@ -4229,7 +4229,7 @@ mp(mp_)
 
 Component* ScriptingObjects::ScriptingMidiProcessor::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mp);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mp);
 }
 
 int ScriptingObjects::ScriptingMidiProcessor::getCachedIndex(const var &indexExpression) const
@@ -4824,7 +4824,7 @@ void ScriptingObjects::TimerObject::setTimerCallback(var callbackFunction)
 	tc = WeakCallbackHolder(getScriptProcessor(), this, callbackFunction, 0);
 	tc.incRefCount();
 	tc.setThisObject(this);
-	tc.addAsSource(this, "onTimerCallback");
+	tc.addAsSource(this, "timerCallback");
 }
 
 
@@ -6263,6 +6263,21 @@ bool ApiHelpers::isSynchronous(const var& syncValue)
 	return getDispatchType(syncValue, false) == dispatch::DispatchType::sendNotificationSync;
 }
 
+var ApiHelpers::createRectangle(const var::NativeFunctionArgs& a)
+{
+	if(a.numArguments == 1 && a.arguments[0].isArray() && a.arguments[0].size() == 4)
+		return var(new ScriptingObjects::ScriptRectangle(a.arguments[0]));
+	else if(a.numArguments == 2)
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>((double)a.arguments[0], (double)a.arguments[1])));
+	else if(a.numArguments == 4)
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>((double)a.arguments[0], 
+																		   (double)a.arguments[1],
+																		   (double)a.arguments[2],
+																		   (double)a.arguments[3])));
+	else
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>()));
+}
+
 var ApiHelpers::getVarFromPoint(Point<float> pos)
 {
 	Array<var> p;
@@ -6934,8 +6949,11 @@ ScriptingObjects::ScriptBackgroundTask::ScriptBackgroundTask(ProcessorWithScript
 	ConstScriptingObject(p, 0),
 	Thread(name),
 	currentTask(p, this, var(), 1),
-	finishCallback(p, this, var(), 2)
+	finishCallback(p, this, var(), 2),
+	recordingSession(new ProfiledRecordingSession(p->getMainController_()->getDebugSession(), DebugSession::ThreadIdentifier::Type::WorkerThread)) 
 {
+	PROFILE_ONLY(recordingSession->getDataSource()->name = name);
+
 	String s;
 	s << getThreadName() << "abort checks";
 	abortId = Identifier(s);
@@ -7084,6 +7102,8 @@ bool ScriptingObjects::ScriptBackgroundTask::killVoicesAndCall(var loadingFuncti
 			if (safeThis != nullptr)
 			{
 				auto r = safeThis->currentTask.callSync(nullptr, 0, nullptr);
+
+				safeThis->currentTask.clear();
 
 				if (!r.wasOk())
 					debugError(p, r.getErrorMessage());
@@ -7250,6 +7270,11 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 	TRACE_COUNTER("scripting", ct, numAbortChecks);
 #endif
 
+
+	recordingSession->initIfEmpty(DebugSession::ThreadIdentifier::getCurrent());
+	recordingSession->checkRecording();
+	DebugSession::ProfileDataSource::ScopedProfiler sp(recordingSession->getDataSource(), dynamic_cast<JavascriptProcessor*>(getScriptProcessor()));
+	
 	if (currentTask || childProcessData)
 	{
 		if (forwardToLoadingThread)
@@ -7261,7 +7286,6 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 		{
 			childProcessData->run();
 			childProcessData = nullptr;
-
 		}
 		else
 		{
@@ -7274,6 +7298,8 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 				getScriptProcessor()->getMainController_()->writeToConsole(r.getErrorMessage(), 1, dynamic_cast<Processor*>(getScriptProcessor()));
 #endif
 		}
+
+		currentTask.clear();
 
 		if (forwardToLoadingThread)
 		{
@@ -8231,11 +8257,13 @@ struct ScriptingObjects::GlobalCableReference::Wrapper
 	API_METHOD_WRAPPER_0(GlobalCableReference, getValue);
 	API_METHOD_WRAPPER_0(GlobalCableReference, getValueNormalised);
 	API_VOID_METHOD_WRAPPER_1(GlobalCableReference, setValue);
+	API_VOID_METHOD_WRAPPER_1(GlobalCableReference, sendData);
 	API_VOID_METHOD_WRAPPER_1(GlobalCableReference, setValueNormalised);
 	API_VOID_METHOD_WRAPPER_2(GlobalCableReference, setRange);
 	API_VOID_METHOD_WRAPPER_3(GlobalCableReference, setRangeWithSkew);
 	API_VOID_METHOD_WRAPPER_3(GlobalCableReference, setRangeWithStep);
 	API_VOID_METHOD_WRAPPER_2(GlobalCableReference, registerCallback);
+	API_VOID_METHOD_WRAPPER_1(GlobalCableReference, registerDataCallback);
 	API_METHOD_WRAPPER_1(GlobalCableReference, deregisterCallback);
 	API_VOID_METHOD_WRAPPER_3(GlobalCableReference, connectToMacroControl);
     API_VOID_METHOD_WRAPPER_2(GlobalCableReference, connectToGlobalModulator);
@@ -8299,11 +8327,13 @@ ScriptingObjects::GlobalCableReference::GlobalCableReference(ProcessorWithScript
 	ADD_API_METHOD_0(getValue);
 	ADD_API_METHOD_0(getValueNormalised);
 	ADD_API_METHOD_1(setValue);
+	ADD_API_METHOD_1(sendData);
 	ADD_API_METHOD_1(setValueNormalised);
 	ADD_API_METHOD_2(setRange);
 	ADD_API_METHOD_3(setRangeWithSkew);
 	ADD_API_METHOD_3(setRangeWithStep);
 	ADD_API_METHOD_2(registerCallback);
+	ADD_API_METHOD_1(registerDataCallback);
 	ADD_API_METHOD_1(deregisterCallback);
 	ADD_API_METHOD_3(connectToMacroControl);
     ADD_API_METHOD_2(connectToGlobalModulator);
@@ -8343,6 +8373,20 @@ void ScriptingObjects::GlobalCableReference::setValue(double inputWithinRange)
 	setValueNormalised(v);
 }
 
+void ScriptingObjects::GlobalCableReference::sendData(var dataToSend)
+{
+	if(auto c = getCableFromVar(cable))
+	{
+		MemoryOutputStream mos;
+		dataToSend.writeToStream(mos);
+		mos.flush();
+
+		ScopedValueSetter<bool> svs(dataRecursion, true);
+		c->sendData(nullptr, const_cast<void*>(mos.getData()), mos.getDataSize());
+	}
+		
+}
+
 void ScriptingObjects::GlobalCableReference::setRange(double min, double max)
 {
 	inputRange = scriptnode::InvertableParameterRange(min, max);
@@ -8361,6 +8405,105 @@ void ScriptingObjects::GlobalCableReference::setRangeWithStep(double min, double
 	inputRange = scriptnode::InvertableParameterRange(min, max, stepSize);
 	inputRange.checkIfIdentity();
 }
+
+
+struct ScriptingObjects::GlobalCableReference::DataCallback: public scriptnode::routing::GlobalRoutingManager::CableTargetBase
+{
+	DataCallback(GlobalCableReference& p, const var& f):
+	  parent(p),
+	  callback(p.getScriptProcessor(), &p, f, 1)
+	{
+		id << dynamic_cast<Processor*>(p.getScriptProcessor())->getId() << ".dataCallback";
+
+		callback.incRefCount();
+		callback.setHighPriority();
+
+		auto ilf = dynamic_cast<WeakCallbackHolder::CallableObject*>(f.getObject());
+
+		if (ilf != nullptr)
+		{
+			if (auto dobj = dynamic_cast<DebugableObjectBase*>(ilf))
+			{
+				id << dobj->getDebugName();
+				funcLocation = dobj->getLocation();
+			}
+		}
+
+		if (auto c = getCableFromVar(parent.cable))
+		{
+			c->addTarget(this);
+		}
+	};
+
+
+	~DataCallback()
+	{
+		if (auto c = getCableFromVar(parent.cable))
+		{
+			c->removeTarget(this);
+		}
+	}
+	
+
+	DebugableObjectBase::Location funcLocation;
+	GlobalCableReference& parent;
+	WeakCallbackHolder callback;
+
+	void sendValue(double d) override {};
+
+	void sendData(const void* data, size_t numBytes) override
+	{
+		if(!parent.dataRecursion)
+		{
+			MemoryInputStream mis(data, numBytes, false);
+			auto x = var::readFromStream(mis);
+			callback.call1(x);
+		}
+	}
+
+	void selectCallback(Component* rootEditor) override
+	{
+#if USE_BACKEND
+		auto sp = parent.getScriptProcessor();
+
+		auto br = dynamic_cast<BackendRootWindow*>(rootEditor);
+
+		br->gotoIfWorkspace(dynamic_cast<Processor*>(sp));
+
+		auto l = funcLocation;
+
+		BackendPanelHelpers::ScriptingWorkspace::showEditor(br, true);
+
+		auto f = [sp, l]()
+		{
+			DebugableObject::Helpers::gotoLocation(nullptr, dynamic_cast<JavascriptProcessor*>(sp), l);
+		};
+
+		Timer::callAfterDelay(400, f); 
+#endif
+	}
+
+	String getTargetId() const override { return id; }
+
+	Path getTargetIcon() const override
+	{
+		Path path;
+		path.loadPathFromData(HiBinaryData::SpecialSymbols::scriptProcessor, SIZE_OF_PATH(HiBinaryData::SpecialSymbols::scriptProcessor));
+		return path;
+	}
+
+	String id;
+};
+
+void ScriptingObjects::GlobalCableReference::registerDataCallback(var dataCallbackFunction)
+{
+	if (HiseJavascriptEngine::isJavascriptFunction(dataCallbackFunction))
+	{
+        auto nc = new DataCallback(*this, dataCallbackFunction);
+		dataCallbacks.add(nc);
+	}
+}
+
 
 struct ScriptingObjects::GlobalCableReference::Callback: public scriptnode::routing::GlobalRoutingManager::CableTargetBase,
 														 public PooledUIUpdater::SimpleTimer
@@ -8491,6 +8634,15 @@ void ScriptingObjects::GlobalCableReference::registerCallback(var callbackFuncti
 
 bool ScriptingObjects::GlobalCableReference::deregisterCallback(var callbackFunction)
 {
+	for(auto c: dataCallbacks)
+	{
+		if(c->callback.matches(callbackFunction))
+		{
+			dataCallbacks.removeObject(c);
+			return true;
+		}
+	}
+
 	for(auto c: callbacks)
 	{
 		if(c->callback.matches(callbackFunction))
@@ -8504,7 +8656,7 @@ bool ScriptingObjects::GlobalCableReference::deregisterCallback(var callbackFunc
 }
 
 struct MacroCableTarget : public scriptnode::routing::GlobalRoutingManager::CableTargetBase,
-						 public ControlledObject
+						  public ControlledObject
 {
 	MacroCableTarget(MainController* mc, int index, bool filterReps) :
 		ControlledObject(mc),
@@ -8881,6 +9033,11 @@ void ScriptingObjects::ScriptedMacroHandler::setUpdateCallback(var callback)
 void ScriptingObjects::ScriptedMacroHandler::setExclusiveMode(bool shouldBeExclusive)
 {
 	getScriptProcessor()->getMainController_()->getMacroManager().setExclusiveMode(shouldBeExclusive);
+}
+
+void ScriptingObjects::ScriptedMacroHandler::handleAsyncUpdate()
+{
+	sendUpdateMessage(sendNotificationAsync);
 }
 
 namespace MacroIds

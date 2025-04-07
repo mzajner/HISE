@@ -664,14 +664,20 @@ public:
 			bool isConnectedToMidi() const;
 			bool isConnectedToComponent() const;
 
+			ValueToTextConverter vtc;
 			const int index;
 			String id;
 			float lastValue = 0.0f;
 			bool allowMidi = true;
 			bool allowHost = true;
+			float defaultParameterValue = 0.0f;
 			NormalisableRange<float> range;
 			Result r;
 			var args[2];
+
+#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
+			bool isAdditionalPluginParameter = false;
+#endif
 
 #if USE_OLD_AUTOMATION_DISPATCH
 			LambdaBroadcaster<var*> syncListeners;
@@ -938,6 +944,25 @@ public:
 
 		CustomAutomationData::Ptr getCustomAutomationData(int index) const;
 
+		CustomAutomationData::List getAdditionalPluginParameters()
+		{
+			return additionalPluginParameters;
+		}
+
+		void setAdditionalPluginParameterComponents(var componentList)
+		{
+#if !USE_BACKEND
+			additionalPluginParameterComponents = componentList;
+#endif
+		}
+
+		var getAdditionalPluginParameterComponentList() { return additionalPluginParameterComponents; }
+
+		void setAdditionalPluginParameters(CustomAutomationData::List additionalParameters)
+		{
+			additionalPluginParameters.swapWith(additionalParameters);
+		}
+
 		int getCustomAutomationIndex(const Identifier& id) const;
 
 		/** Registers a listener that will be notified about preset changes. */
@@ -1034,7 +1059,7 @@ public:
 		MainController* mc;
 		bool useUndoForPresetLoads = false;
 
-		
+		var additionalPluginParameterComponents;
 
 		struct CustomStateManager : public UserPresetStateManager
 		{
@@ -1063,9 +1088,12 @@ public:
 
 		CustomAutomationData::List customAutomationData;
 
+		CustomAutomationData::List additionalPluginParameters;
 		
 
     private:
+
+		DebugSession::ProfileDataSource::Ptr userPresetSource;
 
 		friend class UserPresetHelpers;
 		friend class FrontendProcessor;
@@ -1475,7 +1503,8 @@ public:
 
 	void notifyShutdownToRegisteredObjects();
 
-	SampleManager &getSampleManager() noexcept {return *sampleManager; };
+	SampleManager &getSampleManager() noexcept {return *sampleManager; }
+	
 	const SampleManager &getSampleManager() const noexcept { return *sampleManager; };
 
 	MacroManager &getMacroManager() noexcept {return macroManager;};
@@ -1719,6 +1748,10 @@ public:
 
 	void timerCallback() override;
 
+	bool forceSaveAsPluginState = false;
+
+	void savePluginState(MemoryBlock& destData, int currentlyLoadedProgram);
+
 #if USE_BACKEND
 
 	void setScriptWatchTable(ScriptWatchTable *table);
@@ -1769,6 +1802,22 @@ public:
 
 #endif
 
+	DebugSession::ProfileDataSource::Ptr getProfileDataSourceForLock(LockHelpers::Type t, bool useRealLock, bool getWaitSource) const
+	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+		useRealLock &= getDebugSession().isRecordingMultithread();
+
+		if(!useRealLock)
+			return nullptr;
+
+		auto idx = (int)t;
+		idx += ((int)getWaitSource * (int)LockHelpers::Type::numLockTypes);
+		return lockProfile.getSource(idx);
+#else
+		return nullptr;
+#endif
+	}
 
 	void setPlotter(Plotter *p);
 
@@ -1967,6 +2016,11 @@ public:
 		allowSoftBypassRamps = shouldBeAllowed;
 	}
 
+	
+
+	DebugSession& getDebugSession() { return debugSessionHandler; }
+	const DebugSession& getDebugSession() const { return debugSessionHandler; }
+
 	bool shouldUseSoftBypassRamps() const noexcept;
 
 	void setCurrentMarkdownPreview(MarkdownContentProcessor* p)
@@ -2124,6 +2178,7 @@ private:
 	bool embedAllResources = false;
 
 	PooledUIUpdater globalUIUpdater;
+    DebugSession debugSessionHandler;
 	dispatch::RootObject rootDispatcher;
 	dispatch::library::ProcessorHandler processorHandler;
 	dispatch::library::CustomAutomationSourceManager customAutomationSourceManager;
@@ -2154,6 +2209,11 @@ private:
 	CriticalSection iteratorLock;
 
 	ScopedPointer<UndoManager> controlUndoManager;
+
+
+
+	ProfileCollection lockProfile;
+	ProfileCollection loadProfile;
 
 	ScopedPointer<JavascriptThreadPool> javascriptThreadPool;
 
