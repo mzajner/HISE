@@ -560,7 +560,7 @@ bool PluginParameterAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
 	bool isMultiChannel = (inputs == HISE_NUM_PLUGIN_CHANNELS || inputs == 0) && (outputs == HISE_NUM_PLUGIN_CHANNELS);
 	return isStereo || isMultiChannel;
 #endif
-	}
+}
 
 
 PluginParameterAudioProcessor::~PluginParameterAudioProcessor()

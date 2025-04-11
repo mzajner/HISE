@@ -99,19 +99,19 @@
       </MODULEPATHS>
     </XCODE_MAC>
     <VS2022 targetFolder="Builds/VisualStudio2022" smallIcon="ho3qQy" bigIcon="ho3qQy"
-            useIPP="Sequential" IPPLibrary="" extraDefs="HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_USE_VS2022=1&#10;PERFETTO=0&#10;NOMINMAX=1 &#10;WIN32_LEAN_AND_MEAN=1&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
+            useIPP="Sequential" IPPLibrary="" extraDefs="HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_USE_VS2022=1&#10;PERFETTO=0&#10;NOMINMAX=1 &#10;WIN32_LEAN_AND_MEAN=1&#10;HISE_INCLUDE_PROFILING_TOOLKIT=1&#10;HISE_USE_OPENGL_FOR_PLUGIN=1&#10;HISE_DEFAULT_OPENGL_VALUE=1&#10;AUDIOFFT_FFT3=1"
             extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /Zc:__cplusplus /permissive- /vmg&#10;&#10; "
             IPP1ALibrary="Static_Library">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" generateManifest="1" winArchitecture="x64" isDebug="1"
-                       optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common"
+                       optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;C:/Program Files/Common Files/fftw3"
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
-                       enablePluginBinaryCopyStep="0" defines="PERFETTO=1"/>
+                       enablePluginBinaryCopyStep="0" defines="PERFETTO=1" libraryPath="C:/Program Files/Common Files/fftw3"/>
         <CONFIGURATION name="Release" generateManifest="1" winArchitecture="x64" isDebug="0"
-                       targetName="HISE" headerPath="../../../../tools/SDK/ASIOSDK2.3/common"
+                       targetName="HISE" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;C:/Program Files/Common Files/fftw3"
                        useRuntimeLibDLL="0" enableIncrementalLinking="1" alwaysGenerateDebugSymbols="1"
                        debugInformationFormat="ProgramDatabase" enablePluginBinaryCopyStep="0"
-                       linkTimeOptimisation="1" defines="PERFETTO=0"/>
+                       linkTimeOptimisation="1" defines="PERFETTO=0" libraryPath="C:/Program Files/Common Files/fftw3"/>
         <CONFIGURATION name="CI" winWarningLevel="4" generateManifest="1" winArchitecture="x64"
                        isDebug="0" optimisation="2" targetName="HISE" headerPath="../../../../tools/SDK/ASIOSDK2.3/common"
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
@@ -258,7 +258,7 @@
                JUCE_USE_DIRECTWRITE="1" JUCE_JACK="1" HISE_ENABLE_EXPANSIONS="1"
                HISE_ENABLE_MIDI_INPUT_FOR_FX="1" JUCE_STRICT_REFCOUNTEDPOINTER="1"
                HISE_INCLUDE_RLOTTiE="1" HISE_INCLUDE_SNEX="1" HISE_INCLUDE_LORIS="1"
-               HISE_USE_LORIS_DLL="0"/>
+               HISE_USE_LORIS_DLL="0" JUCE_DSP_USE_SHARED_FFTW="1" JUCE_DSP_USE_STATIC_FFTW="0"/>
   <LIVE_SETTINGS>
     <OSX/>
     <WINDOWS/>

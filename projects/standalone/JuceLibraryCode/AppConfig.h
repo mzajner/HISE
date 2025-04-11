@@ -45,7 +45,7 @@
 
 #define JUCE_USE_DARK_SPLASH_SCREEN 1
 
-#define JUCE_PROJUCER_VERSION 0x60104
+#define JUCE_PROJUCER_VERSION 0x60103
 
 //==============================================================================
 #define JUCE_MODULE_AVAILABLE_hi_backend                  1
@@ -300,6 +300,10 @@
  #define   HI_EXPORT_DSP_LIBRARY 0
 #endif
 
+#ifndef    HISE_UPDATE_CONVOLUTION_DAMPING_ASYNC
+ //#define HISE_UPDATE_CONVOLUTION_DAMPING_ASYNC 1
+#endif
+
 #ifndef    IS_STATIC_DSP_LIBRARY
  //#define IS_STATIC_DSP_LIBRARY 1
 #endif
@@ -376,6 +380,18 @@
 
 #ifndef    INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION
  //#define INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION 1
+#endif
+
+#ifndef    HISE_INCLUDE_BX_LICENSER
+ //#define HISE_INCLUDE_BX_LICENSER 0
+#endif
+
+#ifndef    HISE_INCLUDE_NKS_SDK
+ //#define HISE_INCLUDE_NKS_SDK 0
+#endif
+
+#ifndef    HISE_USE_SCRIPT_RECTANGLE_OBJECT
+ //#define HISE_USE_SCRIPT_RECTANGLE_OBJECT 0
 #endif
 
 //==============================================================================
@@ -606,11 +622,11 @@
 #endif
 
 #ifndef    JUCE_DSP_USE_SHARED_FFTW
- //#define JUCE_DSP_USE_SHARED_FFTW 0
+ #define   JUCE_DSP_USE_SHARED_FFTW 1
 #endif
 
 #ifndef    JUCE_DSP_USE_STATIC_FFTW
- //#define JUCE_DSP_USE_STATIC_FFTW 0
+ #define   JUCE_DSP_USE_STATIC_FFTW 0
 #endif
 
 #ifndef    JUCE_DSP_ENABLE_SNAP_TO_ZERO
