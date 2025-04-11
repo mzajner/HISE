@@ -38,7 +38,7 @@
 // BEGIN SECTION A
 
 #ifndef JUCE_DISPLAY_SPLASH_SCREEN
- #define JUCE_DISPLAY_SPLASH_SCREEN 0
+ #define JUCE_DISPLAY_SPLASH_SCREEN 1
 #endif
 
 // END SECTION A
@@ -300,6 +300,10 @@
  #define   HI_EXPORT_DSP_LIBRARY 0
 #endif
 
+#ifndef    HISE_UPDATE_CONVOLUTION_DAMPING_ASYNC
+ //#define HISE_UPDATE_CONVOLUTION_DAMPING_ASYNC 1
+#endif
+
 #ifndef    IS_STATIC_DSP_LIBRARY
  //#define IS_STATIC_DSP_LIBRARY 1
 #endif
@@ -376,6 +380,18 @@
 
 #ifndef    INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION
  //#define INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION 1
+#endif
+
+#ifndef    HISE_INCLUDE_BX_LICENSER
+ //#define HISE_INCLUDE_BX_LICENSER 0
+#endif
+
+#ifndef    HISE_INCLUDE_NKS_SDK
+ //#define HISE_INCLUDE_NKS_SDK 0
+#endif
+
+#ifndef    HISE_USE_SCRIPT_RECTANGLE_OBJECT
+ //#define HISE_USE_SCRIPT_RECTANGLE_OBJECT 0
 #endif
 
 //==============================================================================
