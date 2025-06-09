@@ -289,6 +289,10 @@
  //#define HISE_MACROS_ARE_PLUGIN_PARAMETERS 0
 #endif
 
+#ifndef    HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION
+ //#define HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION 0
+#endif
+
 //==============================================================================
 // hi_dsp_library flags:
 
