@@ -299,13 +299,12 @@ Point<float> ApiHelpers::getPointFromVar(const var& data, Result* r /*= nullptr*
 	}
 }
 
-var ApiHelpers::getVarRectangle(Rectangle<float> floatRectangle, Result* r /*= nullptr*/)
+var ApiHelpers::getVarRectangle(bool useRectangleClass, Rectangle<float> floatRectangle, Result* r /*= nullptr*/)
 {
 	ignoreUnused(r);
 
-#if HISE_USE_SCRIPT_RECTANGLE_OBJECT
-	return var(new ScriptingObjects::ScriptRectangle(floatRectangle.toDouble()));
-#else
+	if(useRectangleClass)
+		return var(new ScriptingObjects::ScriptRectangle(floatRectangle.toDouble()));
 
 	Array<var> newRect;
 
@@ -315,7 +314,6 @@ var ApiHelpers::getVarRectangle(Rectangle<float> floatRectangle, Result* r /*= n
 	newRect.add(floatRectangle.getHeight());
 
 	return var(newRect);
-#endif
 }
 
 
@@ -6851,9 +6849,9 @@ void ScriptingApi::Console::breakInDebugger()
 
 void ScriptingApi::Console::startSampling(const String& sessionId)
 {
-	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
-
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+    auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+    
 	if(auto s = dh.startSession(dynamic_cast<JavascriptProcessor*>(getScriptProcessor()), sessionId))
 	{
 		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->addInplaceDebugValue(id, lineNumber, s->getTextForName(), s);
@@ -7254,6 +7252,7 @@ ScriptingApi::FileSystem::FileSystem(ProcessorWithScriptingContent* pwsc):
 	addConstant("Downloads", (int)Downloads);
 	addConstant("Applications", (int)Applications);
 	addConstant("Temp", (int)Temp);
+	addConstant("Music", (int)Music);
 
 	ADD_API_METHOD_1(getFolder);
 	ADD_API_METHOD_3(findFiles);
@@ -7549,6 +7548,7 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	case UserHome: f = File::getSpecialLocation(File::userHomeDirectory); break;
 	case Documents: f = File::getSpecialLocation(File::userDocumentsDirectory); break;
 	case Desktop:	f = File::getSpecialLocation(File::userDesktopDirectory); break;
+	case Music:		f = File::getSpecialLocation(File::userMusicDirectory); break;
 	case Downloads: f = File::getSpecialLocation(File::userHomeDirectory).getChildFile("Downloads"); break;
 	case Applications: f = File::getSpecialLocation(File::globalApplicationsDirectory); break;
 	case Temp: f = File::getSpecialLocation(File::tempDirectory); break;
@@ -8000,7 +8000,7 @@ void ScriptingApi::Server::setNumAllowedDownloads(int maxNumberOfParallelDownloa
 
 bool ScriptingApi::Server::isOnline()
 {
-	const char* urlsToTry[] = { "http://google.com/generate_204", "https://amazon.com", nullptr };
+	const char* urlsToTry[] = { "https://google.com/generate_204", "https://amazon.com", nullptr };
 
 	for (const char** url = urlsToTry; *url != nullptr; ++url)
 	{

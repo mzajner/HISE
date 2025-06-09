@@ -886,6 +886,8 @@ public:
 
 		Array<WeakReference<ScriptComponent>> linkedComponentTargets;
 
+		bool useRectangleClass = false;
+
 		var customControlCallback;
 
 		NamedValueSet defaultValues;
@@ -1826,6 +1828,8 @@ public:
 
 		// ========================================================================================================
 
+		void changed() override;
+
 #if HISE_INCLUDE_RLOTTIE
 		bool isAnimationActive() const;
 		RLottieAnimation::Ptr getAnimation();
@@ -1898,6 +1902,14 @@ public:
 		ScopedPointer<RLottieAnimation> animation;
 		var animationData;
 #endif
+
+		struct PluginParameterInfo
+		{
+			void update(ScriptPanel* sp);
+
+			int pluginParameterIndex = -1;
+			Processor* p = nullptr;
+		} pluginParameterInfo;
 
 		Array<WeakReference<AnimationListener>> animationListeners;
 
@@ -2842,6 +2854,7 @@ public:
 	ScriptComponent * getComponentWithName(const Identifier &componentName);
 	const ScriptComponent * getComponentWithName(const Identifier &componentName) const;
 	int getComponentIndex(const Identifier &componentName) const;
+	int getComponentIndex(ScriptComponent* sc) const;
 
 	StringArray getMacroNames();
 
