@@ -2488,7 +2488,6 @@ String ScriptingObjects::ScriptedLookAndFeel::loadStyleSheetFile(const String& f
 
 void ScriptingObjects::ScriptedLookAndFeel::setStyleSheetInternal(const String& cssCode)
 {
-	debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), "\tThe CSS renderer is still experimental, so use with precaution.");
 
 	currentStyleSheet = cssCode;
 	simple_css::Parser p(cssCode);
