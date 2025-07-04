@@ -672,6 +672,11 @@ bool PluginParameterAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
 }
 
 
+<<<<<<< Updated upstream
+=======
+
+
+>>>>>>> Stashed changes
 PluginParameterAudioProcessor::~PluginParameterAudioProcessor()
 {
 	
