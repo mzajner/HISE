@@ -137,10 +137,6 @@
  //#define USE_SCRIPT_COPY_PROTECTION 0
 #endif
 
-#ifndef    USE_IPP
- #define   USE_IPP 0
-#endif
-
 #ifndef    USE_VDSP_FFT
  //#define USE_VDSP_FFT 1
 #endif
@@ -372,7 +368,7 @@
 // hi_rlottie flags:
 
 #ifndef    HISE_INCLUDE_RLOTTIE
- //#define HISE_INCLUDE_RLOTTIE 1
+ #define   HISE_INCLUDE_RLOTTIE 1
 #endif
 
 #ifndef    HISE_RLOTTIE_DYNAMIC_LIBRARY
@@ -386,6 +382,13 @@
  //#define INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION 1
 #endif
 
+<<<<<<< HEAD
+=======
+#ifndef    HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER
+ //#define HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER 0
+#endif
+
+>>>>>>> 5757d503642648d7c9b1a761ad7ee5d6a4c5f72d
 #ifndef    HISE_INCLUDE_BX_LICENSER
  //#define HISE_INCLUDE_BX_LICENSER 0
 #endif

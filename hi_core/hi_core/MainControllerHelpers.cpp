@@ -1051,8 +1051,6 @@ bool MidiControllerAutomationHandler::setParameterInverted(int index, bool value
 		d.inverted = value;
 		return true;
 	});
-
-	return false;
 }
 
 void ConsoleLogger::logMessage(const String &message)
@@ -1065,8 +1063,6 @@ void ConsoleLogger::logMessage(const String &message)
 	{
 		debugToConsole(processor, message);
 	}
-
-	
 }
 
 ControlledObject::ControlledObject(MainController *m, bool notifyOnShutdown) :
@@ -1584,10 +1580,9 @@ void AudioRendererBase::initAfterFillingEventBuffer()
 		if ((bufferSize = getMainController()->getMainSynthChain()->getLargestBlockSize()) != 0)
 		{
 			auto numSamplesTill80Ms = getMainController()->getMainSynthChain()->getSampleRate() * 0.08;
-
 			auto numBuffersTill80Ms = roundToInt(numSamplesTill80Ms / (double)bufferSize);
 
-			thisNumThrowAway = jmax(NumThrowAwayBuffers, numBuffersTill80Ms);
+			thisNumThrowAway = jlimit(12, NumThrowAwayBuffers, numBuffersTill80Ms);
 
 			auto& lb = *eventBuffers.getLast();
 			numSamplesToRender = (int)lb.getEvent(lb.getNumUsed() - 1).getTimeStamp();
@@ -1607,7 +1602,7 @@ void AudioRendererBase::initAfterFillingEventBuffer()
 
 			for(auto events: eventBuffers)
 			{
-				events->subtractFromTimeStamps(-bufferSize * thisNumThrowAway);
+				//events->subtractFromTimeStamps(-bufferSize * thisNumThrowAway);
 				events->alignEventsToRaster<HISE_EVENT_RASTER>(numSamplesToRender);
 			}
 			
@@ -1687,17 +1682,24 @@ bool AudioRendererBase::renderAudio()
 			int numThisTime = jmin<int>(bufferSize, numTodo);
 
 			AudioSampleBuffer ab = getChunk(pos, numThisTime);
-			HiseEventBuffer thisBuffer;
-
-			for(auto events: eventBuffers)
-				events->moveEventsBelow(thisBuffer, pos + numThisTime);
-
-			thisBuffer.subtractFromTimeStamps(pos);
-
 			MidiBuffer mb;
 
-			for (const auto& e : thisBuffer)
-				mb.addEvent(e.toMidiMesage(), e.getTimeStamp());
+			if(numThrowAway == 0)
+			{
+				HiseEventBuffer thisBuffer;
+
+				for(auto events: eventBuffers)
+					events->moveEventsBelow(thisBuffer, pos + numThisTime);
+
+				thisBuffer.subtractFromTimeStamps(pos);
+
+				for (const auto& e : thisBuffer)
+					mb.addEvent(e.toMidiMesage(), e.getTimeStamp());
+			}
+			else
+			{
+				nirvana.clear();
+			}
 
 			auto& bufferToUse = numThrowAway > 0 ? nirvana : ab;
 
@@ -1709,8 +1711,8 @@ bool AudioRendererBase::renderAudio()
 			{
 				--numThrowAway;
 
-				for(auto events: eventBuffers)
-					events->subtractFromTimeStamps(numThisTime);
+				//for(auto events: eventBuffers)
+				//	events->subtractFromTimeStamps(numThisTime);
 			}
 			else
 			{

@@ -56,7 +56,7 @@ namespace hise { using namespace juce;
 	{
 		for (auto& mb : modChains)
 		{
-			if (!mb.getChain()->shouldBeProcessedAtAll())
+			if (!mb.getChain()->shouldBeProcessedAtAll() && !mb.isForceProcessEnabled())
 			{
 				mb.clear();
 				continue;
@@ -334,6 +334,10 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 		else
 		{
 			auto suspendAtSilence = isSuspendedOnSilence();
+
+			// ignore the suspendAtSilence when rendering offline to avoid the effect not being processed in the throwaway-phase
+			if(getMainController()->getSampleManager().isNonRealtime())
+				suspendAtSilence = false;
 
 			if (suspendAtSilence && masterState.numSilentBuffers > numSilentCallbacksToWait)
 			{

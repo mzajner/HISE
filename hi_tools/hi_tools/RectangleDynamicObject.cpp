@@ -81,8 +81,7 @@ RectangleDynamicObject::FunctionMap::FunctionMap()
 	ADD_FUNCTION(intersects, "(var otherRect)", [](const Args& a)
 	{
 		Rectangle<double> r;
-		Point<double> p;
-
+		
 		if(getRectangleArgs(a, r))
 			return getRectangle(a).intersects(r);
 
@@ -112,6 +111,19 @@ RectangleDynamicObject::FunctionMap::FunctionMap()
 
 	ADD_FUNCTION(toString, "()", [](const Args& a) { return getObject(a)->toString(); });
 	ADD_FUNCTION(isEmpty, "()", [](const Args& a) { return getRectangle(a).isEmpty(); });
+	
+	ADD_FUNCTION(toArray, "()", [](const Args& a)
+	{		
+		auto r = getRectangle(a);
+
+		Array<var> arr;
+		arr.add(r.getX());
+		arr.add(r.getY());
+		arr.add(r.getWidth());
+		arr.add(r.getHeight());
+
+		return var(arr);
+	});
 	
 	
 	ADD_FUNCTION(reduced, "(double x, double optionalY)", [](const Args& a)
