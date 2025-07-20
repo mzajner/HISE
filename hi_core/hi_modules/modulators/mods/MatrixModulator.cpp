@@ -225,14 +225,14 @@ void MatrixModulator::onModulationDrop(int parameterIndex, int modulationSourceI
 {
 	if(container != nullptr && parameterIndex == SpecialParameters::Value)
 	{
-		MatrixIds::Helpers::addConnection(globalMatrixData, getMainController(), getId(), modulationSourceIndex);
+		MatrixIds::Helpers::addConnection(globalMatrixData, getMainController(), getMatrixTargetId(), modulationSourceIndex);
 	}
 }
 
 String MatrixModulator::getModulationTargetId(int parameterIndex) const
 {
 	if(parameterIndex == SpecialParameters::Value)
-		return getId();
+		return getMatrixTargetId();
 
 	return Processor::getModulationTargetId(parameterIndex);
 }
@@ -460,6 +460,8 @@ void MatrixModulator::restoreFromValueTree(const ValueTree& v)
 	loadAttribute(Value, "Value");
 	loadAttribute(SmoothingTime, "SmoothingTime");
 
+	customTargetId = v.getProperty("CustomId", "").toString();
+
 	auto vr = v.getChildWithName(MatrixIds::ValueRange);
 	auto ri = vr.getChildWithName(MatrixIds::InputRange);
 	auto ro = vr.getChildWithName(MatrixIds::OutputRange);
@@ -475,6 +477,7 @@ ValueTree MatrixModulator::exportAsValueTree() const
 {
 	auto v = EnvelopeModulator::exportAsValueTree();
 
+	v.setProperty("CustomId", customTargetId, nullptr);
 	saveAttribute(Value, "Value");
 	saveAttribute(SmoothingTime, "SmoothingTime");
 
@@ -521,12 +524,16 @@ void MatrixModulator::reset(int voiceIndex)
 {
 	EnvelopeModulator::reset(voiceIndex);
 
-	SimpleReadWriteLock::ScopedReadLock sl(matrixLock);
-	PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
-
-	for(auto m: allMods)
+	// only call reset in poly mode because it will reset
+	// the uptime in the target mods and the monophonic envelope
+	// will have a continuous stream of samples.
+	if(!isInMonophonicMode())
 	{
-		m->reset();
+		SimpleReadWriteLock::ScopedReadLock sl(matrixLock);
+		PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
+
+		for(auto m: allMods)
+			m->reset();
 	}
 }
 
@@ -699,7 +706,7 @@ void MatrixModulator::rebuildModList()
 
 void MatrixModulator::onMatrixChange(const ValueTree& v, bool wasAdded)
 {
-	if(MatrixIds::Helpers::matchesTarget(v, getId()))
+	if(MatrixIds::Helpers::matchesTarget(v, getMatrixTargetId()))
 	{
 		ScopedPointer<Item> toBeDeleted;
 
@@ -776,7 +783,7 @@ void MatrixModulator::onMatrixChange(const ValueTree& v, bool wasAdded)
 
 void MatrixModulator::onModeChange(const ValueTree& v, const Identifier& id)
 {
-	if(MatrixIds::Helpers::matchesTarget(v, getId()))
+	if(MatrixIds::Helpers::matchesTarget(v, getMatrixTargetId()))
 	{
 		jassert(id == MatrixIds::Mode || id == MatrixIds::SourceIndex);
 		rebuildModList();

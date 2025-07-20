@@ -139,10 +139,8 @@ void HardcodedMasterFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool
 
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(on, shouldAdd);
-	}
 
 	extraMods.connectToRuntimeTarget(on, shouldAdd);
 }
@@ -223,9 +221,14 @@ void HardcodedMasterFX::handleHiseEvent(const HiseEvent &m)
 {
 	MasterEffectProcessor::handleHiseEvent(m);
 
+	// The HISE events will be processed if there are nodes in a midi_chain
+	// but the default behaviour should ignore the HISE events so that it matches
+	// the script FX behaviour...
+#if 0
 	HiseEvent copy(m);
 	if (opaqueNode != nullptr)
 		opaqueNode->handleHiseEvent(copy);
+#endif
 }
 
 void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int numSamples)
@@ -561,11 +564,9 @@ void HardcodedPolyphonicFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, 
 
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(on, shouldAdd);
-	}
-
+	
 	extraModSources.connectToRuntimeTarget(on, shouldAdd);
 }
 
@@ -1096,10 +1097,8 @@ void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqu
 
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(opaqueNode, shouldAdd);
-	}
 
 	extraModSources.connectToRuntimeTarget(opaqueNode, shouldAdd);
 }

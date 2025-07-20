@@ -38,6 +38,7 @@ using namespace juce;
 
 class HardcodedSwappableEffect : public HotswappableProcessor,
 							     public ProcessorWithExternalData,
+								 public ProcessorWithCustomFilterStatistics,
 								 public RuntimeTargetHolder
 {
 public:
@@ -139,6 +140,25 @@ public:
 	ModulatorChain::ExtraModulatorRuntimeTargetSource::ParameterInitData getParameterInitData(int pIndex);
 
 protected:
+
+	ModulatorChain* getPitchChain()
+	{
+		if(auto synth = dynamic_cast<ModulatorSynth*>(&asProcessor()))
+		{
+			auto mc = synth->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation);
+			return dynamic_cast<ModulatorChain*>(mc);
+		}
+
+		auto pp = asProcessor().getParentProcessor(true);
+
+		if(pp != nullptr)
+		{
+			auto mc = pp->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation);
+			return dynamic_cast<ModulatorChain*>(mc);
+		}
+
+		return nullptr;
+	}
 
 	bool hasLoadedButUncompiledEffect() const;
 
