@@ -208,7 +208,7 @@ public:
 	File hisePath;
 	
     bool useIpp;
-    
+		    
     bool legacyCpuSupport = false;
 
 	bool rawMode = false;
@@ -260,6 +260,8 @@ public:
 
 	void setSilent(bool shouldBeSilent) { silentMode = shouldBeSilent; }
 
+    std::function<void(String)> errorFunction;
+    
 protected:
 
 	void setProgress(double d)
