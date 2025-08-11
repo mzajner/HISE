@@ -641,6 +641,11 @@ public:
     void sendVoiceStartCableValue(Modulator* m, const HiseEvent& e);
 
 	ValueTree getMatrixModulatorData() const { return runtimeSource.matrixData; }
+
+	MatrixIds::Helpers::Properties matrixProperties;
+
+	var getMatrixModulationProperties() const { return matrixProperties.toJSON(getMainController()); }
+
 	runtime_target::connection getMatrixModulatorConnection() const { return runtimeSource.createConnection(); }
 
 	void handleRetriggeredNote(ModulatorSynthVoice *voice) override
@@ -661,6 +666,23 @@ public:
 	LambdaBroadcaster<int, String> editCallbackHandler;
 
 	LambdaBroadcaster<int> currentMatrixSourceBroadcaster;
+
+	enum class DragAction
+	{
+		DragEnd,
+		DragStart,
+		Drop,
+		Hover,
+		DisabledHover,
+		numDragActions
+	};
+
+	void sendDragMessage(int sourceIndex, const String& targetId, DragAction eventType)
+	{
+		dragBroadcaster.sendMessage(sendNotificationAsync, sourceIndex, targetId, eventType);
+	}
+
+	LambdaBroadcaster<int, String, DragAction> dragBroadcaster;
 
 private:
 

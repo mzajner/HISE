@@ -245,11 +245,9 @@ struct ScriptCreatedComponentWrapper::AdditionalMouseCallback: public MouseListe
 	{
         auto mc = scriptComponent->getScriptProcessor()->getMainController_();
 
-        SimpleReadWriteLock::ScopedTryReadLock  sl(mc->getJavascriptThreadPool().getLookAndFeelRenderLock());
-        
-        if(sl)
-        {
-            LockHelpers::SafeLock sl(mc, LockHelpers::Type::ScriptLock);
+        if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(mc->getJavascriptThreadPool().getLookAndFeelRenderLock()))
+		{
+            LockHelpers::SafeLock sl2(mc, LockHelpers::Type::ScriptLock);
 
             if (data.listener != nullptr)
             {
@@ -642,7 +640,7 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
 		debugError(dynamic_cast<Processor*>(sc->getScriptProcessor()), "Slider min/max value exceeds upper limit!");
 	}
 
-	if (min >= max || stepsize <= 0.0 || min < -MaxValue || max > MaxValue)
+	if (min >= max || stepsize < 0.0 || min < -MaxValue || max > MaxValue)
 	{
 		s->setMode(HiSlider::Mode::Linear, {0.0, 1.0});
 		s->setEnabled(false);
@@ -3158,7 +3156,7 @@ float ScriptedControlAudioParameter::getValue() const
 
 void ScriptedControlAudioParameter::setValue(float newValue)
 {
-	if(recursive || shouldSkipHostUpdate())
+	if(recursive)
 		return;
 
 	ScopedValueSetter<bool> svs(sendToHost, false);
