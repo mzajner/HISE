@@ -516,6 +516,13 @@ struct ScriptingObjects::ScriptModulationMatrix::Wrapper
 	API_METHOD_WRAPPER_0(ScriptModulationMatrix, getTargetList);
 	API_METHOD_WRAPPER_2(ScriptModulationMatrix, canConnect);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, clearAllConnections);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setCurrentlySelectedSource);
+	API_VOID_METHOD_WRAPPER_4(ScriptModulationMatrix, setConnectionProperty);
+	API_METHOD_WRAPPER_3(ScriptModulationMatrix, getConnectionProperty);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setSourceSelectionCallback);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setMatrixModulationProperties);
+	API_METHOD_WRAPPER_0(ScriptModulationMatrix, getMatrixModulationProperties);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setDragCallback);
 };
 
 ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p, const String& cid) :
@@ -523,11 +530,11 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ControlledObject(p->getMainController_()),
 	connectionCallback(p, nullptr, var(), 3),
 	editCallback(p, nullptr, var(), 1),
-	um(getMainController()->getControlUndoManager())
+	um(getMainController()->getControlUndoManager()),
+	sourceSelectionCallback(getScriptProcessor(), this, var(), 1),
+	dragCallback(getScriptProcessor(), this, {}, 3) 
 {
 	container = dynamic_cast<GlobalModulatorContainer*>(ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), cid));
-
-	
 
 	if (container == nullptr)
 		reportScriptError(cid + " is not a global modulation container");
@@ -543,6 +550,16 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ADD_API_METHOD_1(getComponent);
 	ADD_API_METHOD_2(canConnect);
 	ADD_API_METHOD_1(clearAllConnections);
+
+	ADD_API_METHOD_1(setCurrentlySelectedSource);
+	ADD_API_METHOD_1(setSourceSelectionCallback);
+	ADD_API_METHOD_1(setDragCallback);
+
+	ADD_API_METHOD_1(setMatrixModulationProperties);
+	ADD_API_METHOD_0(getMatrixModulationProperties);
+
+	ADD_API_METHOD_3(getConnectionProperty);
+	ADD_API_METHOD_4(setConnectionProperty);
 
 	getScriptProcessor()->getMainController_()->getUserPresetHandler().addStateManager(this);
 
@@ -791,6 +808,139 @@ var ScriptModulationMatrix::getTargetList() const
 		l.add(t);
 
 	return var(l);
+}
+
+void ScriptModulationMatrix::setCurrentlySelectedSource(String sourceId)
+{
+	auto idx = sourceList.indexOf(sourceId);
+
+	if(idx != -1 && container != nullptr)
+	{
+		if(!container->matrixProperties.selectableSources)
+			reportScriptError("Selectable sources are disabled");
+
+		container->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, idx);
+	}
+}
+
+void ScriptModulationMatrix::setSourceSelectionCallback(var newCallback)
+{
+	container->currentMatrixSourceBroadcaster.removeListener(*this);
+
+	if(HiseJavascriptEngine::isJavascriptFunction(newCallback))
+	{
+		if(!container->matrixProperties.selectableSources)
+			reportScriptError("Selectable sources are disabled");
+
+		sourceSelectionCallback = WeakCallbackHolder(getScriptProcessor(), this, newCallback, 1);
+		sourceSelectionCallback.incRefCount();
+		sourceSelectionCallback.setThisObject(this);
+
+		container->currentMatrixSourceBroadcaster.addListener(*this, [](ScriptModulationMatrix& m, int idx)
+		{
+			if(isPositiveAndBelow(idx, m.sourceList.size()))
+			{
+				auto sourceName = m.sourceList[idx];
+				m.sourceSelectionCallback.call1(sourceName);
+			}
+		});
+	}
+	
+}
+
+void ScriptModulationMatrix::setDragCallback(var newDragCallback)
+{
+	container->dragBroadcaster.removeListener(*this);
+
+	if(HiseJavascriptEngine::isJavascriptFunction(newDragCallback))
+	{
+		dragCallback = WeakCallbackHolder(getScriptProcessor(), this, newDragCallback, 3);
+		dragCallback.incRefCount();
+
+		container->dragBroadcaster.addListener(*this, [](ScriptModulationMatrix& m, int si, const String& t, GlobalModulatorContainer::DragAction a)
+		{
+			if(m.dragCallback)
+			{
+				std::array<var, (int)GlobalModulatorContainer::DragAction::numDragActions> s({
+					"DragEnd",
+					"DragStart",
+					"Drop",
+					"Hover",
+					"DisabledHover"
+				});
+
+				var args[3];
+				args[0] = si == -1 ? String() : m.sourceList[si];
+				args[1] = t;
+				args[2] = s[(int)a];
+
+				m.dragCallback.call(args, 3);
+			}
+		}, false);
+	}
+}
+
+void ScriptModulationMatrix::setMatrixModulationProperties(var newProperties)
+{
+	container->matrixProperties.fromJSON(newProperties);
+
+	for(const auto& iv: container->matrixProperties.initValues)
+	{
+		if(iv.second.intensity != 0.0 && !iv.second)
+		{
+			reportScriptError(iv.first + " init value has no Mode property defined");
+		}
+	}
+}
+
+var ScriptModulationMatrix::getConnectionProperty(String sourceId, String targetId, String propertyId)
+{
+	auto sourceIndex = sourceList.indexOf(sourceId);
+
+	if(sourceIndex != -1)
+	{
+		auto c = MatrixIds::Helpers::getConnection(container->getMatrixModulatorData(), sourceIndex, targetId);
+
+		if(c.isValid())
+		{
+			Identifier id(propertyId);
+
+			if(MatrixIds::Helpers::getWatchableIds().contains(id))
+			{
+				return c[id];
+			}
+		}
+	}
+
+	return {};
+}
+
+bool ScriptModulationMatrix::setConnectionProperty(String sourceId, String targetId, String propertyId, var value)
+{
+	auto sourceIndex = sourceList.indexOf(sourceId);
+
+	if(sourceIndex != -1)
+	{
+		auto c = MatrixIds::Helpers::getConnection(container->getMatrixModulatorData(), sourceIndex, targetId);
+
+		if(c.isValid())
+		{
+			Identifier id(propertyId);
+
+			if(MatrixIds::Helpers::getWatchableIds().contains(id))
+			{
+				c.setProperty(id, value, getScriptProcessor()->getMainController_()->getControlUndoManager());
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+var ScriptModulationMatrix::getMatrixModulationProperties() const
+{
+	return container->getMatrixModulationProperties();
 }
 
 } // namespace ScriptingObjects

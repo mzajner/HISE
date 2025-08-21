@@ -75,6 +75,8 @@ public:
 	bool swap(HotswappableProcessor* other) override;
 	bool isPolyphonic() const { return polyHandler.isEnabled(); }
 
+	virtual StringArray getIllegalParameterIds() const;
+
 	virtual int getParameterOffset() const { return 0; }
 
     String getCurrentEffectId() const override { return currentEffect; }
@@ -121,6 +123,11 @@ public:
 	virtual void renderData(ProcessDataDyn& data);
 	bool hasHardcodedTail() const;
     var getParameterProperties() const override;
+
+	virtual int getExtraModulationIndex(int modulationSlotIndexWithoutOffset) const
+	{
+		return modulationSlotIndexWithoutOffset;
+	}
 
 	void setupChannelData(float** data, AudioSampleBuffer& b, int startSample)
 	{

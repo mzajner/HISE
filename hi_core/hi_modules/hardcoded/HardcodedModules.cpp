@@ -52,7 +52,7 @@ HardcodedMasterFX::HardcodedMasterFX(MainController* mc, const String& uid) :
 
 	finaliseModChains();
 
-	extraMods.init(modChains);
+	extraMods.init(modChains, 0);
 
 	getMatrix().setNumAllowedConnections(NUM_MAX_CHANNELS);
 	connectionChanged();
@@ -320,7 +320,7 @@ HardcodedPolyphonicFX::HardcodedPolyphonicFX(MainController *mc, const String &u
 
 	finaliseModChains();
 
-	extraModSources.init(modChains);
+	extraModSources.init(modChains, 0);
 	
 	getMatrix().setNumAllowedConnections(NUM_MAX_CHANNELS);
 	getMatrix().init();
@@ -741,7 +741,7 @@ float HardcodedEnvelopeModulator::getAttribute(int index) const
 float HardcodedEnvelopeModulator::getDefaultValue(int index) const
 {
 	if (index < getParameterOffset())
-		return EnvelopeModulator::getAttribute(index);
+		return EnvelopeModulator::getDefaultValue(index);
 	else
 	{
 		index -= getParameterOffset();
@@ -1082,12 +1082,32 @@ void HardcodedSynthesiser::restoreFromValueTree(const ValueTree& v)
 
 float HardcodedSynthesiser::getAttribute(int parameterIndex) const
 {
-	return getHardcodedAttribute(parameterIndex);
+	auto offset = getParameterOffset();
+
+	if(parameterIndex < offset)
+		return ModulatorSynth::getAttribute(parameterIndex);
+
+	return getHardcodedAttribute(parameterIndex - offset);
 }
 
 void HardcodedSynthesiser::setInternalAttribute(int parameterIndex, float newValue)
 {
-	setHardcodedAttribute(parameterIndex, newValue);
+	auto offset = getParameterOffset();
+
+	if(parameterIndex < offset)
+		ModulatorSynth::setInternalAttribute(parameterIndex, newValue);
+	else
+		setHardcodedAttribute(parameterIndex - offset, newValue);
+}
+
+float HardcodedSynthesiser::getDefaultValue(int parameterIndex) const
+{
+	auto offset = getParameterOffset();
+
+	if(parameterIndex < offset)
+		return ModulatorSynth::getDefaultValue(parameterIndex);
+
+	return getAttribute(parameterIndex - offset);
 }
 
 void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
