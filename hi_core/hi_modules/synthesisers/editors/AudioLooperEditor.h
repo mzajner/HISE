@@ -62,7 +62,9 @@ public:
 		pitchButton->updateValue();
 
 		reverseButton->updateValue();
-
+        
+        crossfadeSlider->updateValue();
+        
 		startModSlider->updateValue();
 
 		rootNote->setEnabled(getProcessor()->getAttribute(AudioLooper::PitchTracking) > 0.5f);
@@ -102,6 +104,7 @@ private:
     ScopedPointer<HiSlider> rootNote;
     ScopedPointer<HiSlider> startModSlider;
     ScopedPointer<HiToggleButton> reverseButton;
+    ScopedPointer<HiSlider> crossfadeSlider;
 
 
     //==============================================================================

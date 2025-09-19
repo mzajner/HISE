@@ -67,7 +67,11 @@ public:
 private:
 
 	friend class AudioLooper;
-
+     // Crossfade
+    bool isInCrossfadeRegion = false;
+    int crossfadePosition = 0;
+    int crossfadeLengthSamples = 0;
+    
 	time_stretcher stretcher;
 
 	Random r;
@@ -100,6 +104,7 @@ public:
 		RootNote,
 		SampleStartMod,
 		Reversed,
+        LoopCrossfade,
 		numLooperParameters
 	};
 
@@ -143,6 +148,8 @@ public:
 	bool isUsingLoop() const { return loopEnabled; }
 
 	void refreshSyncState();
+    
+    void setCrossfadePercentage(float newCrossfadePercentage);
 
 private:
 
@@ -157,7 +164,15 @@ private:
 	bool reversed = false;
 	bool pitchTrackingEnabled;
 	int rootNote;
-
+    
+    //Crossfade
+    float crossfadePercentage = 0.0f;  // 0.0 to 1.0 (0% to 100%)
+    int crossfadeLengthSamples = 0;    // Calculated dynamically
+    AudioSampleBuffer crossfadeStartBuffer;
+    bool crossfadeBufferNeedsUpdate = true;
+    
+    void updateCrossfadeBuffer();  // Method to pre-compute crossfade buffer
+    
 	int sampleStartMod = 0;
 
 	friend class AudioLooperVoice;

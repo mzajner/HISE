@@ -42,6 +42,7 @@ SET_DOCUMENTATION(AudioLooper)
 	ADD_PARAMETER_DOC_WITH_NAME(RootNote, "Root Note", "Sets the root note when pitch tracking is enabled");
 	ADD_PARAMETER_DOC_WITH_NAME(SampleStartMod, "Sample Start modulation", "Modulates the sample start");
 	ADD_PARAMETER_DOC_WITH_NAME(Reversed, "Reversed", "Reverses the sample");
+    ADD_PARAMETER_DOC_WITH_NAME(LoopCrossfade, "Loop Crossfade", "Sets the crossfade length in samples for smooth loop transitions");
 }
 
 AudioLooperVoice::AudioLooperVoice(ModulatorSynth *ownerSynth) :
@@ -66,6 +67,11 @@ void AudioLooperVoice::startNote(int midiNoteNumber, float /*velocity*/, Synthes
 
 	AudioLooper *looper = static_cast<AudioLooper*>(getOwnerSynth());
 	
+    // Initialize crossfade variables
+    crossfadeLengthSamples = looper->crossfadeLengthSamples;
+    isInCrossfadeRegion = false;
+    crossfadePosition = 0;
+    
 	SimpleReadWriteLock::ScopedReadLock sl(looper->getBuffer().getDataLock());
 
 	uptimeDelta = looper->getBuffer().isNotEmpty() ? 1.0 : 0.0;
@@ -120,184 +126,221 @@ int getSamplePos(int uptime, int loopLength, int loopOffset, bool reversed, int 
 
 void AudioLooperVoice::calculateBlock(int startSample, int numSamples)
 {
-	AudioLooper* looper = static_cast<AudioLooper*>(getOwnerSynth());
-
-	const int startIndex = startSample;
-	const int samplesToCopy = numSamples;
-
-	const float* voicePitchValues = getOwnerSynth()->getPitchValuesForVoice();
-
-
-
-	SimpleReadWriteLock::ScopedReadLock sl(looper->getBuffer().getDataLock());
-	auto sampleRange = looper->getBuffer().getCurrentRange();
-
-	auto buffer = &looper->getAudioSampleBuffer();
-	auto length = sampleRange.getLength();
-
-	const bool noBuffer = buffer->getNumChannels() == 0;
-	const bool sampleFinished = !looper->isUsingLoop() && (voiceUptime > length);
-
-	const bool isLastVoice = getOwnerSynth()->isLastStartedVoice(this);
-	const bool isReversed = looper->reversed;
-
-	if (sampleFinished || noBuffer)
-	{
-		voiceBuffer.clear(startSample, numSamples);
-		resetVoice();
-		return;
-	}
-
-	int offset = sampleRange.getStart();
-
-	const float* leftSamples = buffer->getReadPointer(0, 0);
-	const float* rightSamples = buffer->getNumChannels() > 1 ? buffer->getReadPointer(1, 0) : leftSamples;
-
-	auto loopRange = looper->getBuffer().getLoopRange();
-
-	int loopStart = jmax<int>(offset, loopRange.getStart());
-	int loopEnd = jmin<int>(loopRange.getEnd(), sampleRange.getEnd());
-
-	length = looper->isUsingLoop() ? loopEnd - loopStart : length;
-
-	auto end = sampleRange.getLength() - 1;
-
-	auto loopOffset = jmax<int>(0, loopStart - offset);
-
-	bool resetAfterBlock = false;
-	bool checkReset = !looper->isUsingLoop();
-
-	if(looper->syncMode != AudioSampleProcessor::FreeRunning)
-	{
-		auto stretchRatio = looper->syncer.getRatio(1.0);
-
-		const double pitchDelta = (uptimeDelta * (voicePitchValues == nullptr ? 1.0f : voicePitchValues[startSample]));
-		
-		stretcher.setTransposeFactor(pitchDelta, 0.17);
-
-		auto offset = roundToInt(voiceUptime);
-
-		auto afterLoop = 0;
-		auto afterLoopOutputs = 0;
-
-		auto& b = looper->getBuffer().getBuffer();
-		
-		float* input[2];
-
-		input[0] = b.getWritePointer(0, offset);
-		input[1] = b.getWritePointer(1, offset);
-
-		auto numInputs = stretchRatio * (double)samplesToCopy;
-		auto numOutputs = samplesToCopy;
-
-		if(offset + numInputs > end)
-		{
-			auto temp = numInputs;
-			numInputs = end - offset;
-			afterLoop = temp - numInputs;
-			afterLoopOutputs = roundToInt(afterLoop / stretchRatio);
-			numOutputs -= afterLoopOutputs;
-		}
-		
-		float* outputs[2];
-		outputs[0] = voiceBuffer.getWritePointer(0, startSample);
-		outputs[1] = voiceBuffer.getWritePointer(1, startSample);
-		
-		stretcher.process(input, roundToInt(numInputs), outputs, numOutputs);
-
-		voiceUptime += numInputs;
-
-		if(afterLoop > 0)
-		{
-			input[0] = b.getWritePointer(0, 0);
-			input[1] = b.getWritePointer(1, 0);
-
-			outputs[0] += numOutputs;
-			outputs[1] += numOutputs;
-
-			stretcher.process(input, roundToInt(afterLoop), outputs, afterLoopOutputs);
-
-			voiceUptime = afterLoop;
-		}
-	}
-	else
-	{
-		while (--numSamples >= 0)
-		{
-			int uptime = (int)voiceUptime;
-
-			const int samplePos = getSamplePos(uptime, length, loopOffset, isReversed, end);
-			const int nextSamplePos = getSamplePos(uptime + 1, length, loopOffset, isReversed, end);
-
-			//const int samplePos = (int)voiceUptime % looper->length + looper->sampleRange.getStart();
-			//const int nextSamplePos = ((int)voiceUptime + 1) % looper->length + looper->sampleRange.getStart();
-
-			if (checkReset && (uptime + 2) > length)
-			{
-				voiceBuffer.clear(startSample, numSamples + 1);
-
-				resetAfterBlock = true;
-				break;
-			}
-
-			const double alpha = fmod(voiceUptime, 1.0);
-
-			const float leftPrevSample = leftSamples[samplePos];
-			const float rightPrevSample = rightSamples[samplePos];
-
-			const float leftNextSample = leftSamples[nextSamplePos];
-			const float rightNextSample = rightSamples[nextSamplePos];
-
-			const float leftSample = Interpolator::interpolateLinear(leftPrevSample, leftNextSample, (float)alpha);
-			const float rightSample = Interpolator::interpolateLinear(rightPrevSample, rightNextSample, (float)alpha);
-
-			//const float currentSample = invAlpha * v1 + alpha * v2;
-
-			// Stereo mode assumed
-			voiceBuffer.setSample(0, startSample, leftSample);
-			voiceBuffer.setSample(1, startSample, rightSample);
-
-			jassert(voicePitchValues == nullptr || voicePitchValues[startSample] > 0.0f);
-
-			const double pitchDelta = (uptimeDelta * (voicePitchValues == nullptr ? 1.0f : voicePitchValues[startSample]));
-
-			voiceUptime += pitchDelta;
-
-			++startSample;
-		}
-	}
-
-	
+    AudioLooper* looper = static_cast<AudioLooper*>(getOwnerSynth());
+    
+    const int startIndex = startSample;
+    const int samplesToCopy = numSamples;
+    
+    const float* voicePitchValues = getOwnerSynth()->getPitchValuesForVoice();
+    
+    SimpleReadWriteLock::ScopedReadLock sl(looper->getBuffer().getDataLock());
+    auto sampleRange = looper->getBuffer().getCurrentRange();
+    
+    auto buffer = &looper->getAudioSampleBuffer();
+    auto length = sampleRange.getLength();
+    
+    const bool noBuffer = buffer->getNumChannels() == 0;
+    const bool sampleFinished = !looper->isUsingLoop() && (voiceUptime > length);
+    
+    const bool isLastVoice = getOwnerSynth()->isLastStartedVoice(this);
+    const bool isReversed = looper->reversed;
+    
+    if (sampleFinished || noBuffer)
+    {
+        voiceBuffer.clear(startSample, numSamples);
+        resetVoice();
+        return;
+    }
+    
+    int offset = sampleRange.getStart();
+    
+    const float* leftSamples = buffer->getReadPointer(0, 0);
+    const float* rightSamples = buffer->getNumChannels() > 1 ? buffer->getReadPointer(1, 0) : leftSamples;
+    
+    auto loopRange = looper->getBuffer().getLoopRange();
+    
+    int loopStart = jmax<int>(offset, loopRange.getStart());
+    int loopEnd = jmin<int>(loopRange.getEnd(), sampleRange.getEnd());
+    
+    length = looper->isUsingLoop() ? loopEnd - loopStart : length;
+    
+    auto end = sampleRange.getLength() - 1;
+    
+    auto loopOffset = jmax<int>(0, loopStart - offset);
+    
+    bool resetAfterBlock = false;
+    bool checkReset = !looper->isUsingLoop();
+    
+    if(looper->syncMode != AudioSampleProcessor::FreeRunning)
+    {
+        auto stretchRatio = looper->syncer.getRatio(1.0);
+        
+        const double pitchDelta = (uptimeDelta * (voicePitchValues == nullptr ? 1.0f : voicePitchValues[startSample]));
+        
+        stretcher.setTransposeFactor(pitchDelta, 0.17);
+        
+        auto offset = roundToInt(voiceUptime);
+        
+        auto afterLoop = 0;
+        auto afterLoopOutputs = 0;
+        
+        auto& b = looper->getBuffer().getBuffer();
+        
+        float* input[2];
+        
+        input[0] = b.getWritePointer(0, offset);
+        input[1] = b.getWritePointer(1, offset);
+        
+        auto numInputs = stretchRatio * (double)samplesToCopy;
+        auto numOutputs = samplesToCopy;
+        
+        if(offset + numInputs > end)
+        {
+            auto temp = numInputs;
+            numInputs = end - offset;
+            afterLoop = temp - numInputs;
+            afterLoopOutputs = roundToInt(afterLoop / stretchRatio);
+            numOutputs -= afterLoopOutputs;
+        }
+        
+        float* outputs[2];
+        outputs[0] = voiceBuffer.getWritePointer(0, startSample);
+        outputs[1] = voiceBuffer.getWritePointer(1, startSample);
+        
+        stretcher.process(input, roundToInt(numInputs), outputs, numOutputs);
+        
+        voiceUptime += numInputs;
+        
+        if(afterLoop > 0)
+        {
+            input[0] = b.getWritePointer(0, 0);
+            input[1] = b.getWritePointer(1, 0);
+            
+            outputs[0] += numOutputs;
+            outputs[1] += numOutputs;
+            
+            stretcher.process(input, roundToInt(afterLoop), outputs, afterLoopOutputs);
+            
+            voiceUptime = afterLoop;
+        }
+    }
+    else
+    {
+        // Check if crossfade should be applied - made less restrictive
+        bool shouldCrossfade = looper->isUsingLoop() && crossfadeLengthSamples > 0 &&
+        length > crossfadeLengthSamples && !isReversed;
+        
+        while (--numSamples >= 0)
+        {
+            int uptime = (int)voiceUptime;
+            const double alpha = fmod(voiceUptime, 1.0);
+            
+            if (checkReset && (uptime + 2) > length)
+            {
+                voiceBuffer.clear(startSample, numSamples + 1);
+                resetAfterBlock = true;
+                break;
+            }
+            
+            // Get current sample positions
+            const int samplePos = getSamplePos(uptime, length, loopOffset, isReversed, end);
+            const int nextSamplePos = getSamplePos(uptime + 1, length, loopOffset, isReversed, end);
+            
+            // Get current samples with interpolation
+            const float leftPrevSample = leftSamples[samplePos];
+            const float rightPrevSample = rightSamples[samplePos];
+            const float leftNextSample = leftSamples[nextSamplePos];
+            const float rightNextSample = rightSamples[nextSamplePos];
+            
+            float leftSample = Interpolator::interpolateLinear(leftPrevSample, leftNextSample, (float)alpha);
+            float rightSample = Interpolator::interpolateLinear(rightPrevSample, rightNextSample, (float)alpha);
+            
+            // Apply crossfade if in crossfade region
+            if (shouldCrossfade && looper->crossfadeStartBuffer.getNumSamples() > 0)
+            {
+                int actualLoopLength = loopEnd - loopStart;
+                int absoluteLoopPos = (uptime - loopStart);
+                int posInLoop = absoluteLoopPos % actualLoopLength;
+                if (posInLoop < 0) posInLoop += actualLoopLength;
+                
+                int bufferSize = looper->crossfadeStartBuffer.getNumSamples();
+                int crossfadeStartPos = actualLoopLength - bufferSize;
+                
+                if (posInLoop >= crossfadeStartPos)
+                {
+                    int crossfadeOffset = posInLoop - crossfadeStartPos;
+                    
+                    if (crossfadeOffset >= 0 && crossfadeOffset < bufferSize)
+                    {
+                        float ratio = (float)crossfadeOffset / (float)bufferSize;
+                        
+                        // Equal power crossfade
+                        float fadeOutGain = cosf(ratio * M_PI * 0.5f);
+                        float fadeInGain = sinf(ratio * M_PI * 0.5f);
+                        
+                        float leftStart = looper->crossfadeStartBuffer.getSample(0, crossfadeOffset);
+                        float rightStart = looper->crossfadeStartBuffer.getNumChannels() > 1 ?
+                        looper->crossfadeStartBuffer.getSample(1, crossfadeOffset) : leftStart;
+                        
+                        leftSample = leftSample * fadeOutGain + leftStart * fadeInGain;
+                        rightSample = rightSample * fadeOutGain + rightStart * fadeInGain;
+                        
+                        // Debug output
+                        static int debugCount = 0;
+                        if (++debugCount % 4800 == 0)
+                        {
+                            DBG("Crossfading: loopPos=" + String(posInLoop) + "/" + String(actualLoopLength) +
+                                ", crossfadeOffset=" + String(crossfadeOffset) + "/" + String(bufferSize) +
+                                ", ratio=" + String(ratio, 3) +
+                                ", fadeOut=" + String(fadeOutGain, 3) + ", fadeIn=" + String(fadeInGain, 3));
+                        }
+                    }
+                }
+            }
+            
+            // Apply samples to output buffer
+            voiceBuffer.setSample(0, startSample, leftSample);
+            voiceBuffer.setSample(1, startSample, rightSample);
+            
+            jassert(voicePitchValues == nullptr || voicePitchValues[startSample] > 0.0f);
+            
+            const double pitchDelta = (uptimeDelta * (voicePitchValues == nullptr ? 1.0f : voicePitchValues[startSample]));
+            voiceUptime += pitchDelta;
+            
+            ++startSample;
+        }
+    }
+    
 #if HISE_USE_WRONG_VOICE_RENDERING_ORDER
-	getOwnerSynth()->effectChain->renderVoice(voiceIndex, voiceBuffer, startIndex, samplesToCopy);
+    getOwnerSynth()->effectChain->renderVoice(voiceIndex, voiceBuffer, startIndex, samplesToCopy);
 #endif
-
-	if (auto modValues = getOwnerSynth()->getVoiceGainValues())
-	{
-		FloatVectorOperations::multiply(voiceBuffer.getWritePointer(0, startIndex), modValues + startIndex, samplesToCopy);
-		FloatVectorOperations::multiply(voiceBuffer.getWritePointer(1, startIndex), modValues + startIndex, samplesToCopy);
-	}
-	else
-	{
-		const float constantGainValue = getOwnerSynth()->getConstantGainModValue();
-
-		FloatVectorOperations::multiply(voiceBuffer.getWritePointer(0, startIndex), constantGainValue, samplesToCopy);
-		FloatVectorOperations::multiply(voiceBuffer.getWritePointer(1, startIndex), constantGainValue, samplesToCopy);
-	}
-
-	if (isLastVoice && length != 0)
-	{
-		const int samplePos = getSamplePos((int)voiceUptime, length, loopOffset, isReversed, length);
-
-		looper->getBuffer().sendDisplayIndexMessage((float)samplePos);
-	}
-
+    
+    if (auto modValues = getOwnerSynth()->getVoiceGainValues())
+    {
+        FloatVectorOperations::multiply(voiceBuffer.getWritePointer(0, startIndex), modValues + startIndex, samplesToCopy);
+        FloatVectorOperations::multiply(voiceBuffer.getWritePointer(1, startIndex), modValues + startIndex, samplesToCopy);
+    }
+    else
+    {
+        const float constantGainValue = getOwnerSynth()->getConstantGainModValue();
+        
+        FloatVectorOperations::multiply(voiceBuffer.getWritePointer(0, startIndex), constantGainValue, samplesToCopy);
+        FloatVectorOperations::multiply(voiceBuffer.getWritePointer(1, startIndex), constantGainValue, samplesToCopy);
+    }
+    
+    if (isLastVoice && length != 0)
+    {
+        const int samplePos = getSamplePos((int)voiceUptime, length, loopOffset, isReversed, length);
+        
+        looper->getBuffer().sendDisplayIndexMessage((float)samplePos);
+    }
+    
 #if !HISE_USE_WRONG_VOICE_RENDERING_ORDER
-	getOwnerSynth()->effectChain->renderVoice(voiceIndex, voiceBuffer, startIndex, samplesToCopy);
+    getOwnerSynth()->effectChain->renderVoice(voiceIndex, voiceBuffer, startIndex, samplesToCopy);
 #endif
-
-	if (resetAfterBlock)
-		resetVoice();
+    
+    if (resetAfterBlock)
+        resetVoice();
 }
 
 void AudioLooperVoice::resetVoice()
@@ -326,7 +369,8 @@ rootNote(64)
 	parameterNames.add("RootNote");
 	parameterNames.add("SampleStartMod");
 	parameterNames.add("Reversed");
-
+    parameterNames.add("LoopCrossfade");
+    
 	updateParameterSlots();
 
 	inputMerger.setManualCountLimit(5);
@@ -356,6 +400,8 @@ void AudioLooper::restoreFromValueTree(const ValueTree &v)
 	loadAttribute(RootNote, "RootNote");
 	loadAttribute(SampleStartMod, "SampleStartMod");
 	loadAttribute(Reversed, "Reversed");
+    loadAttribute(LoopCrossfade, "LoopCrossfade");
+    
 }
 
 ValueTree AudioLooper::exportAsValueTree() const
@@ -368,6 +414,7 @@ ValueTree AudioLooper::exportAsValueTree() const
 	saveAttribute(RootNote, "RootNote");
 	saveAttribute(SampleStartMod, "SampleStartMod");
 	saveAttribute(Reversed, "Reversed");
+    saveAttribute(LoopCrossfade, "LoopCrossfade");
 
 	AudioSampleProcessor::saveToValueTree(v);
 
@@ -386,7 +433,8 @@ float AudioLooper::getAttribute(int parameterIndex) const
 	case PitchTracking:	return pitchTrackingEnabled ? 1.0f : 0.0f;
 	case SampleStartMod: return (float)sampleStartMod;
 	case Reversed:		return reversed ? 1.0f : 0.0f;
-	default:					jassertfalse; return -1.0f;
+    case LoopCrossfade: return crossfadePercentage * 100.0f;
+    default:					jassertfalse; return -1.0f;
 	}
 }
 
@@ -402,6 +450,7 @@ float AudioLooper::getDefaultValue(int parameterIndex) const
 	case PitchTracking:	return 0.0f;
 	case SampleStartMod: return 0.0f;
 	case Reversed:		return 0.0f;
+    case LoopCrossfade: return 0.0f;
 	default: jassertfalse; return -1.0f;
 	}
 }
@@ -423,13 +472,100 @@ void AudioLooper::setInternalAttribute(int parameterIndex, float newValue)
 	case PitchTracking:	pitchTrackingEnabled = newValue > 0.5f; break;
 	case SampleStartMod: sampleStartMod = jmax<int>(0, (int)newValue); break;
 	case Reversed:		reversed = newValue > 0.5f; break;
+    case LoopCrossfade: setCrossfadePercentage(newValue / 100.0f); break; // Convert from 0-100 to 0.0-1.0
 	default:			jassertfalse; break;
 	}
+}
+
+void AudioLooper::updateCrossfadeBuffer()
+{
+    crossfadeStartBuffer.clear();
+    
+    SimpleReadWriteLock::ScopedReadLock sl(getBuffer().getDataLock());
+    
+    if (crossfadePercentage <= 0.0f)
+    {
+        crossfadeLengthSamples = 0;
+        return;
+    }
+    
+    auto sampleRange = getBuffer().getCurrentRange();
+    auto loopRange = getBuffer().getLoopRange();
+    
+    if (loopRange.isEmpty() || sampleRange.isEmpty())
+    {
+        crossfadeLengthSamples = 0;
+        return;
+    }
+    
+    auto& sourceBuffer = getAudioSampleBuffer();
+    if (sourceBuffer.getNumSamples() == 0)
+    {
+        crossfadeLengthSamples = 0;
+        return;
+    }
+    
+    int loopStart = jmax<int>(sampleRange.getStart(), loopRange.getStart());
+    int loopEnd = jmin<int>(loopRange.getEnd(), sampleRange.getEnd());
+    int actualLoopLength = loopEnd - loopStart;
+    
+    if (actualLoopLength <= 0)
+    {
+        crossfadeLengthSamples = 0;
+        return;
+    }
+    
+    // Calculate crossfade length as percentage of loop length
+    crossfadeLengthSamples = (int)(actualLoopLength * crossfadePercentage);
+    
+    // Safety bounds
+    if (crossfadeLengthSamples <= 0 ||
+        loopStart + crossfadeLengthSamples > sourceBuffer.getNumSamples())
+    {
+        crossfadeLengthSamples = 0;
+        return;
+    }
+    
+    // Allocate and copy
+    int numChannels = jmin(2, sourceBuffer.getNumChannels());
+    crossfadeStartBuffer.setSize(numChannels, crossfadeLengthSamples, false, true, true);
+    
+    for (int ch = 0; ch < numChannels; ch++)
+    {
+        crossfadeStartBuffer.copyFrom(ch, 0, sourceBuffer, ch, loopStart, crossfadeLengthSamples);
+    }
+    
+    crossfadeBufferNeedsUpdate = false;
+    
+    DBG("Crossfade: " + String(crossfadePercentage * 100, 1) + "% = " +
+        String(crossfadeLengthSamples) + " samples of " + String(actualLoopLength));
+}
+
+void AudioLooper::setCrossfadePercentage(float newCrossfadePercentage)
+{
+    crossfadePercentage = jlimit(0.0f, 1.0f, newCrossfadePercentage);
+    
+    // Only update if we have valid data
+    if (getBuffer().isNotEmpty())
+    {
+        crossfadeBufferNeedsUpdate = true;
+        updateCrossfadeBuffer();
+    }
+    
+    // Update voices with the calculated samples
+    for (int i = 0; i < getNumVoices(); i++)
+    {
+        if (auto voice = dynamic_cast<AudioLooperVoice*>(getVoice(i)))
+        {
+            voice->crossfadeLengthSamples = crossfadeLengthSamples;
+        }
+    }
 }
 
 void AudioLooper::bufferWasLoaded()
 {
 	refreshSyncState();
+    updateCrossfadeBuffer();
 
 	if (!pitchTrackingEnabled)
 		return;
@@ -525,8 +661,6 @@ void AudioLooper::setSyncMode(int newSyncMode)
 	}
 
 	refreshSyncState();
-
-	
 
 #if 0
 	const double globalBpm = getMainController()->getBpm();
