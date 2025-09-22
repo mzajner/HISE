@@ -137,10 +137,6 @@
  //#define USE_SCRIPT_COPY_PROTECTION 0
 #endif
 
-#ifndef    USE_IPP
- #define   USE_IPP 0
-#endif
-
 #ifndef    USE_VDSP_FFT
  //#define USE_VDSP_FFT 1
 #endif
@@ -289,6 +285,10 @@
  //#define HISE_MACROS_ARE_PLUGIN_PARAMETERS 0
 #endif
 
+#ifndef    HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION
+ //#define HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION 0
+#endif
+
 //==============================================================================
 // hi_dsp_library flags:
 
@@ -368,7 +368,7 @@
 // hi_rlottie flags:
 
 #ifndef    HISE_INCLUDE_RLOTTIE
- //#define HISE_INCLUDE_RLOTTIE 1
+ #define   HISE_INCLUDE_RLOTTIE 1
 #endif
 
 #ifndef    HISE_RLOTTIE_DYNAMIC_LIBRARY
@@ -380,6 +380,10 @@
 
 #ifndef    INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION
  //#define INCLUDE_BIG_SCRIPTNODE_OBJECT_COMPILATION 1
+#endif
+
+#ifndef    HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER
+ //#define HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER 0
 #endif
 
 #ifndef    HISE_INCLUDE_BX_LICENSER
