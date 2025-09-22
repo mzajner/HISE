@@ -96,6 +96,8 @@ public:
 		bool showFavoriteIcons = true;
 		bool fullPathFavorites = false;
 		bool showExpansions = false;
+		bool tagListScrollable = false;
+		int tagListHeight = 60;
 	};
 
 	// ============================================================================================

@@ -989,7 +989,10 @@ void PresetBrowserPanel::fromDynamicObject(const var& object)
 	options.editButtonOffset = getPropertyWithDefault(object, SpecialPanelIds::EditButtonOffset);
 	options.showExpansions = getPropertyWithDefault(object, SpecialPanelIds::ShowExpansionsAsColumn);
 	options.numColumns = getPropertyWithDefault(object, SpecialPanelIds::NumColumns);
-
+	    options.tagListScrollable = getPropertyWithDefault(object, SpecialPanelIds::TagListScrollable);
+    options.tagListHeight = getPropertyWithDefault(object, SpecialPanelIds::TagListHeight);
+    
+    presetBrowser->setOptions(options);
 	auto ratios = getPropertyWithDefault(object, SpecialPanelIds::ColumnWidthRatio);
 	if (ratios.isArray())
 	{
@@ -1044,7 +1047,9 @@ void PresetBrowserPanel::fromDynamicObject(const var& object)
 	options.highlightColour = findPanelColour(PanelColourId::itemColour1);
 	options.textColour = findPanelColour(PanelColourId::textColour);
 	options.font = getFont();
-	
+	options.tagListScrollable = getPropertyWithDefault(object, SpecialPanelIds::TagListScrollable);
+	options.tagListHeight = getPropertyWithDefault(object, SpecialPanelIds::TagListHeight);
+
 	presetBrowser->setOptions(options);
 }
 
@@ -1087,7 +1092,8 @@ juce::Identifier PresetBrowserPanel::getDefaultablePropertyId(int index) const
 	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ShowExpansionsAsColumn, "ShowExpansionsAsColumn");
 	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ShowFavoriteIcon, "ShowFavoriteIcon");
 	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::FavoriteIconOffset, "FavoriteIconOffset");
-
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::TagListScrollable, "TagListScrollable");
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::TagListHeight, "TagListHeight");
 	return Identifier();
 }
 
@@ -1134,6 +1140,8 @@ var PresetBrowserPanel::getDefaultProperty(int index) const
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::SaveButtonBounds, var(emptyArray));
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::MoreButtonBounds, var(emptyArray));
 
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::TagListScrollable, false);
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::TagListHeight, 90);
 	return var();
 }
 

@@ -907,7 +907,13 @@ void PresetBrowser::resized()
 	}
 
 	if (tagList->isActive())
-		tagList->setBounds(listArea.removeFromTop(30));
+	{
+		int requiredHeight = tagList->getRequiredHeight();
+		if (requiredHeight <= 0)
+			requiredHeight = 30; // fallback
+
+		tagList->setBounds(listArea.removeFromTop(requiredHeight));
+	}
 
 	if (showOnlyPresets)
 	{
@@ -1334,6 +1340,10 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	noteLabel->update();
 	tagList->update();
 	modalInputWindow->update();
+
+	tagList->setScrollable(newOptions.tagListScrollable);
+	if (newOptions.tagListScrollable)
+		tagList->setFixedHeight(newOptions.tagListHeight);
 
 	resized();
 }

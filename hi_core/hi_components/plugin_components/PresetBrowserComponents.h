@@ -160,6 +160,11 @@ public:
 
 	void resized() override;
 
+	void parentSizeChanged() override;
+	int getRequiredHeight() const;
+	void setFixedHeight(int height);
+	void setScrollable(bool shouldBeScrollable);
+
 	class Tag : public Component
 	{
 	public:
@@ -212,6 +217,20 @@ public:
 	OwnedArray<Tag> tags;
 
 	Array<WeakReference<Listener>> listeners;
+
+	private:
+		void layoutTagsWithWrapping();
+		void layoutTagsInScrollableArea();
+		int calculateWrappedHeight(int availableWidth) const;
+		
+		static const int TAG_MARGIN_X = 5;
+		static const int TAG_MARGIN_Y = 5;
+		static const int VERTICAL_PADDING = 5;
+
+		ScopedPointer<Viewport> viewport;
+		ScopedPointer<Component> contentComponent;
+		bool isScrollable = false;
+		int fixedHeight = 60; // Default height
 };
 
 class PresetBrowser;

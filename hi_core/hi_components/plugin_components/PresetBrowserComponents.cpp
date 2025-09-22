@@ -92,6 +92,16 @@ TagList::TagList(MainController* mc_, PresetBrowser* p) :
 	editButton("Edit Tags")
 {
 	editButton.addListener(this);
+
+	// Create viewport and content component
+	addAndMakeVisible(viewport = new Viewport());
+	contentComponent = new Component();
+	viewport->setViewedComponent(contentComponent, false);
+	viewport->setVisible(false);
+
+	// Configure scrollbars - only vertical
+	viewport->setScrollBarsShown(true, false); // vertical=true, horizontal=false
+
 	addAndMakeVisible(editButton);
 
 	getMainController()->getUserPresetHandler().addListener(this);
@@ -141,23 +151,196 @@ void TagList::rebuildTags()
 	for (auto n : sa)
 	{
 		ScopedPointer<Tag> nt = new Tag(*this, n);
-		addAndMakeVisible(nt);
+
+		// Add to appropriate parent based on scrollable state
+		if (isScrollable)
+			contentComponent->addAndMakeVisible(nt);
+		else
+			addAndMakeVisible(nt);
+
 		nt->setActive(currentlyActiveTags.contains(n));
 		tags.add(nt.release());
 	}
 
 	resized();
+	if (auto* parentComponent = getParentComponent())
+	{
+		parentComponent->resized();
+	}
 }
 
 void TagList::resized()
 {
 	auto ar = getLocalBounds();
 
+	// Reserve space for edit button first
 	if (editButton.isVisible())
 		editButton.setBounds(ar.removeFromRight(80).reduced(3));
 
-	for (auto t : tags)
-		t->setBounds(ar.removeFromLeft(t->getTagWidth()).reduced(5));
+	// Show/hide viewport based on scrollable state
+	viewport->setVisible(isScrollable);
+
+	if (isScrollable)
+	{
+		viewport->setBounds(ar);
+		layoutTagsInScrollableArea();
+	}
+	else
+	{
+		layoutTagsWithWrapping();
+	}
+}
+
+void TagList::layoutTagsInScrollableArea()
+{
+    // Get available width BEFORE calculating height
+    int availableWidth = viewport->getWidth();
+    
+    // Only subtract scrollbar thickness if we know we'll need vertical scrolling
+    int contentHeight = calculateWrappedHeight(availableWidth);
+    if (contentHeight > viewport->getHeight())
+        availableWidth -= viewport->getScrollBarThickness();
+    
+    // Set content size - width should match viewport width exactly
+    contentComponent->setSize(availableWidth, contentHeight);
+
+    // Layout tags within the content component
+    int currentX = VERTICAL_PADDING;
+    int currentY = VERTICAL_PADDING;
+    int maxRowHeight = 24;
+
+    for (auto* t : tags)
+    {
+        if (!t->isVisible()) continue;
+
+        int tagWidth = t->getTagWidth();
+        int tagHeight = 24;
+
+        if (currentX + tagWidth > availableWidth - VERTICAL_PADDING && currentX > VERTICAL_PADDING)
+        {
+            currentY += maxRowHeight + TAG_MARGIN_Y;
+            currentX = VERTICAL_PADDING;
+            maxRowHeight = tagHeight;
+        }
+
+        t->setBounds(currentX, currentY, tagWidth - 10, tagHeight);
+        currentX += tagWidth + TAG_MARGIN_X;
+        maxRowHeight = jmax(maxRowHeight, tagHeight);
+    }
+}
+
+void TagList::layoutTagsWithWrapping()
+{
+	auto ar = getLocalBounds();
+
+	// Account for edit button space (it's already positioned in resized())
+	int editButtonWidth = editButton.isVisible() ? 80 : 0;
+	int availableWidth = ar.getWidth() - editButtonWidth;
+
+	int currentX = VERTICAL_PADDING;
+	int currentY = VERTICAL_PADDING;
+	int maxRowHeight = 24;
+
+	for (auto* t : tags)
+	{
+		if (!t->isVisible()) continue;
+
+		int tagWidth = t->getTagWidth();
+		int tagHeight = 24;
+
+		if (currentX + tagWidth > availableWidth - VERTICAL_PADDING && currentX > VERTICAL_PADDING)
+		{
+			currentY += maxRowHeight + TAG_MARGIN_Y;
+			currentX = VERTICAL_PADDING;
+			maxRowHeight = tagHeight;
+		}
+
+		t->setBounds(currentX, currentY, tagWidth - 10, tagHeight);
+		currentX += tagWidth + TAG_MARGIN_X;
+		maxRowHeight = jmax(maxRowHeight, tagHeight);
+	}
+}
+
+int TagList::calculateWrappedHeight(int availableWidth) const
+{
+	if (tags.isEmpty())
+		return 34; // Minimum height (24 + padding)
+
+	int currentX = VERTICAL_PADDING;
+	int currentY = VERTICAL_PADDING;
+	int maxRowHeight = 24;
+
+	// Account for edit button space
+	int editButtonWidth = editButton.isVisible() ? 80 : 0;
+	availableWidth -= editButtonWidth;
+
+	for (auto* t : tags)
+	{
+		if (!t->isVisible()) continue;
+
+		int tagWidth = t->getTagWidth();
+		int tagHeight = 24;
+
+		// Check if tag fits on current row
+		if (currentX + tagWidth > availableWidth - VERTICAL_PADDING && currentX > VERTICAL_PADDING)
+		{
+			// Move to next row
+			currentY += maxRowHeight + TAG_MARGIN_Y;
+			currentX = VERTICAL_PADDING;
+			maxRowHeight = tagHeight;
+		}
+
+		currentX += tagWidth + TAG_MARGIN_X;
+		maxRowHeight = jmax(maxRowHeight, tagHeight);
+	}
+
+	return currentY + maxRowHeight + VERTICAL_PADDING;
+}
+
+void TagList::setFixedHeight(int height)
+{
+	fixedHeight = height;
+	resized();
+}
+
+void TagList::setScrollable(bool shouldBeScrollable)
+{
+	isScrollable = shouldBeScrollable;
+
+	if (isScrollable)
+	{
+		// Move tags to content component
+		for (auto* t : tags)
+			contentComponent->addAndMakeVisible(t);
+	}
+	else
+	{
+		// Move tags back to this component
+		for (auto* t : tags)
+			addAndMakeVisible(t);
+	}
+
+	resized();
+}
+
+int TagList::getRequiredHeight() const
+{
+	if (isScrollable)
+		return fixedHeight;
+	else
+		return calculateWrappedHeight(getWidth());
+}
+
+void TagList::parentSizeChanged()
+{
+	Component::parentSizeChanged();
+
+	// When parent size changes, we need to recalculate our layout
+	// and potentially notify parent of our new size requirements
+	if (auto* parentComponent = getParentComponent())
+	{
+		parentComponent->resized(); // This will trigger PresetBrowser::resized()
+	}
 }
 
 void TagList::timerCallback()

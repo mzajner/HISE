@@ -505,7 +505,10 @@ public:
 		FavoriteButtonBounds,
     FullPathFavorites,
     FavoriteIconOffset,
-		numSpecialProperties
+		numSpecialProperties,
+	TagListScrollable,
+	TagListHeight,
+	numSpecialPanelIds
 	};
 
 	SET_PANEL_NAME("PresetBrowser");
