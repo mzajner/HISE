@@ -3126,18 +3126,16 @@ float ScriptedControlAudioParameter::getValue() const
 
 void ScriptedControlAudioParameter::setValue(float newValue)
 {
-    if(recursive || shouldSkipHostUpdate())
-        return;
-    
-    ScopedValueSetter<bool> svs(sendToHost, false);
-    
-    if(scriptProcessor != nullptr)
-    {
-        const float convertedValue = range.convertFrom0to1(newValue);
-        const float snappedValue = range.snapToLegalValue(convertedValue);
-        
-        scriptProcessor->setAttribute(attributeIndex, snappedValue, sendNotificationSync);
-    }
+	if(recursive || shouldSkipHostUpdate())
+		return;
+
+	if(scriptProcessor != nullptr)
+	{
+		const float convertedValue = range.convertFrom0to1(newValue);
+		const float snappedValue = range.snapToLegalValue(convertedValue);
+
+		scriptProcessor->setAttribute(attributeIndex, snappedValue, sendNotificationAsync);
+	}
 }
 
 float ScriptedControlAudioParameter::getDefaultValue() const

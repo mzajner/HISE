@@ -180,21 +180,19 @@ struct HisePluginParameterBase: public ControlledObject,
 
 	bool matchesIndex(int slotIndex) const { return getSlotIndex() == slotIndex; }
 
-    void onUpdate(int index, float v)
-    {
-        FloatSanitizers::sanitizeFloatNumber(v);
-        v = getNormalisableRange().convertTo0to1(v);
-        
-        setIgnoreNextHostUpdate(false);
-        
-        if(v != parameterValueToSend)
-        {
-            parameterValueToSend = v;
-            
-            if(sendToHost)
-                refreshParameterValue();
-        }
-    }
+	void onUpdate(int index, float v)
+	{
+		FloatSanitizers::sanitizeFloatNumber(v);
+		v = getNormalisableRange().convertTo0to1(v);
+
+		setIgnoreNextHostUpdate(false);
+
+		if(v != parameterValueToSend)
+		{
+			parameterValueToSend = v;
+			refreshParameterValue();
+		}
+	}
 
 	void refreshParameterValue()
 	{
@@ -239,9 +237,7 @@ struct HisePluginParameterBase: public ControlledObject,
 	void setIgnoreNextHostUpdate(bool shouldSkip) { skipHostUpdate = shouldSkip;}
 
 	bool shouldSkipHostUpdate() const { return skipHostUpdate; }
-    protected:
-    
-    bool sendToHost = true;
+
 private:
 
 	bool skipHostUpdate = false;
