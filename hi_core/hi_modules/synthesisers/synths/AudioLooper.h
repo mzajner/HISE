@@ -67,10 +67,8 @@ public:
 private:
 
 	friend class AudioLooper;
-     // Crossfade
-    bool isInCrossfadeRegion = false;
-    int crossfadePosition = 0;
-    int crossfadeLengthSamples = 0;
+    bool isFirstLoop = true;
+    
     
 	time_stretcher stretcher;
 
@@ -151,6 +149,7 @@ public:
     
     void setCrossfadePercentage(float newCrossfadePercentage);
 
+    void resetCrossfadeState();
 private:
 
 	HeapBlock<float> resampleBuffer;
@@ -167,14 +166,7 @@ private:
     
     //Crossfade
     float crossfadePercentage = 0.0f;  // 0.0 to 1.0 (0% to 100%)
-    int crossfadeLengthSamples = 0;    // Calculated dynamically
-    AudioSampleBuffer crossfadeStartBuffer;
-    bool crossfadeBufferNeedsUpdate = true;
-    
-    void updateCrossfadeBuffer();  // Method to pre-compute crossfade buffer
-    
 	int sampleStartMod = 0;
-
 	friend class AudioLooperVoice;
 
 	scriptnode::core::stretch_player<1>::tempo_syncer syncer;
