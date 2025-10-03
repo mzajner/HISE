@@ -119,8 +119,9 @@ AudioLooperEditor::AudioLooperEditor (ProcessorEditor *p)
 
 	reverseButton->setup(getProcessor(), AudioLooper::Reversed, "Reversed");
     
-    crossfadeSlider->setup(getProcessor(), AudioLooper::LoopCrossfade, "Loop Crossfade");
-    crossfadeSlider->setMode(HiSlider::Discrete, NormalisableRange<double>(0.0, 100.0, 0.1).withCentreSkew(50.0));
+    crossfadeSlider->setup(getProcessor(), AudioLooper::LoopCrossfade, "Crossfade");
+    crossfadeSlider->setMode(HiSlider::Discrete, NormalisableRange<double>(0.0, 100.0, 0.1).withCentreSkew(25.0));
+    
 #if JUCE_DEBUG
 	startTimer(30);
 #else
@@ -174,9 +175,83 @@ void AudioLooperEditor::paint (Graphics& g)
         g.setColour (strokeColour);
         g.drawRoundedRectangle (x, y, width, height, 6.000f, 2.000f);
     }
-
+    if (getProcessor()->getAttribute(AudioLooper::LoopCrossfade) > 0.0f)
+    {
+        paintOverChildren(g);
+    }
     //[UserPaint] Add your own custom painting code here..
     //[/UserPaint]
+}
+
+void AudioLooperEditor::paintOverChildren(Graphics& g)
+{
+    auto crossfadePercentage = getProcessor()->getAttribute(AudioLooper::LoopCrossfade) / 100.0f;
+    if (crossfadePercentage <= 0.0f) return;
+    
+    auto audioLooper = dynamic_cast<AudioLooper*>(getProcessor());
+    if (!audioLooper) return;
+    
+    auto waveformBounds = sampleBufferContent->getBounds();
+    
+    // Get the range that the AudioLooper actually uses for playback (which is the current range)
+    auto actualLoopRange = audioLooper->getBuffer().getCurrentRange();
+    
+    // Get the range that's currently displayed in the waveform (same as above for AudioLooper)
+    auto displayRange = audioLooper->getBuffer().getCurrentRange();
+    
+    // For AudioLooper, the display range IS the loop range, so no coordinate conversion needed
+    int actualLoopLength = actualLoopRange.getLength();
+    int crossfadeLength = (int)(actualLoopLength * crossfadePercentage);
+    
+    float pixelsPerSample = (float)waveformBounds.getWidth() / (float)actualLoopLength;
+    int crossfadePixels = (int)(crossfadeLength * pixelsPerSample);
+    
+    // Since the display shows exactly the loop range, coordinates are simpler
+    int loopStartPixel = waveformBounds.getX();
+    int loopEndPixel = waveformBounds.getRight();
+    
+    if (actualLoopLength <= 0) return;
+    
+    // Calculate crossfade regions
+    int beginStartX = loopStartPixel;
+    int beginEndX = beginStartX + crossfadePixels;
+    int tailEndX = loopEndPixel;
+    int tailStartX = tailEndX - crossfadePixels;
+    
+    // Ensure crossfade regions don't overlap (in case loop is very short)
+    if (beginEndX > tailStartX)
+    {
+        int overlap = beginEndX - tailStartX;
+        beginEndX -= overlap / 2;
+        tailStartX += overlap / 2;
+    }
+    
+    // Draw beginning crossfade (fade IN)
+    for (int x = beginStartX; x < beginEndX; ++x)
+    {
+        float ratio = (float)(x - beginStartX) / (float)crossfadePixels;
+        float fadeIn = sinf(ratio * M_PI * 0.5f);
+        int fadeHeight = (int)(fadeIn * waveformBounds.getHeight());
+        
+        g.setColour(Colour(100, 255, 100).withAlpha(0.4f));
+        g.fillRect(x, waveformBounds.getBottom() - fadeHeight, 1, fadeHeight);
+    }
+    
+    // Draw tail crossfade (fade OUT)
+    for (int x = tailStartX; x < tailEndX; ++x)
+    {
+        float ratio = (float)(x - tailStartX) / (float)crossfadePixels;
+        float fadeOut = cosf(ratio * M_PI * 0.5f);
+        int fadeHeight = (int)(fadeOut * waveformBounds.getHeight());
+        
+        g.setColour(Colour(255, 100, 100).withAlpha(0.4f));
+        g.fillRect(x, waveformBounds.getBottom() - fadeHeight, 1, fadeHeight);
+    }
+    
+    // Draw crossfade boundary lines
+    g.setColour(Colours::orange.withAlpha(0.6f));
+    g.drawVerticalLine(beginEndX, waveformBounds.getY(), waveformBounds.getBottom());
+    g.drawVerticalLine(tailStartX, waveformBounds.getY(), waveformBounds.getBottom());
 }
 
 void AudioLooperEditor::resized()
@@ -248,16 +323,9 @@ void AudioLooperEditor::sliderValueChanged (Slider* sliderThatWasMoved)
         //[UserSliderCode_rootNote] -- add your slider handling code here..
         //[/UserSliderCode_rootNote]
     }
-    else if (sliderThatWasMoved == startModSlider)
-    {
-        //[UserSliderCode_startModSlider] -- add your slider handling code here..
-        //[/UserSliderCode_startModSlider]
-    }
     else if (sliderThatWasMoved == crossfadeSlider)
     {
-        //[UserSliderCode_crossfadeSlider] -- add your slider handling code here..
-        // The HiSlider handles the parameter changes automatically
-        //[/UserSliderCode_crossfadeSlider]
+        repaint(); // Force redraw when crossfade changes
     }
 
 

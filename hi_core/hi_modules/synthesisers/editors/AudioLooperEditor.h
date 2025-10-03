@@ -85,8 +85,8 @@ public:
     void comboBoxChanged (ComboBox* comboBoxThatHasChanged) override;
     void buttonClicked (Button* buttonThatWasClicked) override;
     void sliderValueChanged (Slider* sliderThatWasMoved) override;
-
-
+    void paintOverChildren(Graphics& g) override;
+    Rectangle<int> getCrossfadeRegion(bool isStartRegion);
 
 private:
     //[UserVariables]   -- You can add your own custom variables in this section.

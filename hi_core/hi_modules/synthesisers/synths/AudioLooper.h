@@ -60,15 +60,40 @@ public:
 	void startNote(int midiNoteNumber, float /*velocity*/, SynthesiserSound*, int /*currentPitchWheelPosition*/) override;
 
 	void calculateBlock(int startSample, int numSamples) override;;
-
+    
+    // Added methods
+    void setupLoopParameters(int& loopStart, int& loopEnd, int& actualLoopLength,
+                             int& crossfadeLength, int& effectiveLoopLength,
+                             int& length, bool& shouldCrossfade);
+    
+    void processTempoSyncedPlayback(int startSample, int samplesToCopy,
+                                    const AudioSampleBuffer* buffer, int end);
+    
+    void processFreeRunningPlayback(int startIndex, int samplesToCopy,
+                                    const float* leftSamples, const float* rightSamples,
+                                    const AudioSampleBuffer* buffer, int loopStart,
+                                    int actualLoopLength, int crossfadeLength,
+                                    int effectiveLoopLength, int length,
+                                    int loopOffset, bool isReversed, int end,
+                                    bool shouldCrossfade, bool checkReset);
+    
+    void processSingleSample(int& startSample, int& numSamples, int uptime, double alpha,
+                             const float* leftSamples, const float* rightSamples,
+                             const AudioSampleBuffer* buffer, int loopStart,
+                             int actualLoopLength, int crossfadeLength,
+                             int effectiveLoopLength, int length,
+                             int loopOffset, bool isReversed, int end,
+                             bool shouldCrossfade, bool& resetAfterBlock, bool checkReset);
+    
+    void applyVoiceEffects(int startIndex, int samplesToCopy, bool isLastVoice,
+                           int length, int loopOffset, bool isReversed);
 	void resetVoice() override;
-	
-
+    
 private:
 
 	friend class AudioLooper;
     bool isFirstLoop = true;
-    
+
     
 	time_stretcher stretcher;
 
@@ -148,6 +173,9 @@ public:
 	void refreshSyncState();
     
     void setCrossfadePercentage(float newCrossfadePercentage);
+    
+    void rangeChanged(AudioSampleBuffer* b, int areaIndex);
+    void bufferReplaced(AudioSampleBuffer* b);
 
     void resetCrossfadeState();
 private:
@@ -172,7 +200,7 @@ private:
 	scriptnode::core::stretch_player<1>::tempo_syncer syncer;
 	double numQuarters = 0.0;
 	AudioSampleProcessor::SyncToHostMode syncMode;
-	
+
 };
 
 
