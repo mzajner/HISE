@@ -185,7 +185,8 @@ void AudioLooperEditor::paint (Graphics& g)
 
 void AudioLooperEditor::paintOverChildren(Graphics& g)
 {
-    auto crossfadePercentage = getProcessor()->getAttribute(AudioLooper::LoopCrossfade) / 100.0f;
+    auto crossfadeValue = getProcessor()->getAttribute(AudioLooper::LoopCrossfade);
+    float crossfadePercentage = (crossfadeValue / 100.0f) * 0.5f;  // Convert to 0-0.5
     if (crossfadePercentage <= 0.0f) return;
     
     auto audioLooper = dynamic_cast<AudioLooper*>(getProcessor());
@@ -193,65 +194,152 @@ void AudioLooperEditor::paintOverChildren(Graphics& g)
     
     auto waveformBounds = sampleBufferContent->getBounds();
     
-    // Get the range that the AudioLooper actually uses for playback (which is the current range)
-    auto actualLoopRange = audioLooper->getBuffer().getCurrentRange();
+    // Get the loop boundaries
+    auto sampleRange = audioLooper->getBuffer().getCurrentRange();
+    auto loopRange = audioLooper->getBuffer().getLoopRange();
     
-    // Get the range that's currently displayed in the waveform (same as above for AudioLooper)
-    auto displayRange = audioLooper->getBuffer().getCurrentRange();
+    int offset = sampleRange.getStart();
+    int loopStart = jmax<int>(offset, loopRange.getStart());
+    int loopEnd = jmin<int>(loopRange.getEnd(), sampleRange.getEnd());
     
-    // For AudioLooper, the display range IS the loop range, so no coordinate conversion needed
-    int actualLoopLength = actualLoopRange.getLength();
-    int crossfadeLength = (int)(actualLoopLength * crossfadePercentage);
-    
-    float pixelsPerSample = (float)waveformBounds.getWidth() / (float)actualLoopLength;
-    int crossfadePixels = (int)(crossfadeLength * pixelsPerSample);
-    
-    // Since the display shows exactly the loop range, coordinates are simpler
-    int loopStartPixel = waveformBounds.getX();
-    int loopEndPixel = waveformBounds.getRight();
-    
+    int actualLoopLength = loopEnd - loopStart;
     if (actualLoopLength <= 0) return;
     
-    // Calculate crossfade regions
+    // Apply 50% limit for visualization (same as audio processing)
+    int crossfadeLength = (int)(actualLoopLength * crossfadePercentage);
+    
+    // Use TOTAL range for display calculations
+    auto totalRange = audioLooper->getBuffer().getTotalRange();
+    int displayLength = totalRange.getLength();
+    if (displayLength <= 0) return;
+    
+    // Map sample positions to pixel positions
+    float pixelsPerSample = (float)waveformBounds.getWidth() / (float)displayLength;
+    
+    int loopStartPixel = waveformBounds.getX() + (int)(loopStart * pixelsPerSample);
+    int loopEndPixel = waveformBounds.getX() + (int)(loopEnd * pixelsPerSample);
+    int crossfadePixels = (int)(crossfadeLength * pixelsPerSample);
+    
+    // Calculate crossfade region boundaries
     int beginStartX = loopStartPixel;
     int beginEndX = beginStartX + crossfadePixels;
+    int tailStartX = loopEndPixel - crossfadePixels;
     int tailEndX = loopEndPixel;
-    int tailStartX = tailEndX - crossfadePixels;
     
-    // Ensure crossfade regions don't overlap (in case loop is very short)
+    // Ensure crossfade regions don't overlap
     if (beginEndX > tailStartX)
     {
-        int overlap = beginEndX - tailStartX;
-        beginEndX -= overlap / 2;
-        tailStartX += overlap / 2;
+        int midPoint = (beginStartX + loopEndPixel) / 2;
+        beginEndX = midPoint;
+        tailStartX = midPoint;
     }
     
-    // Draw beginning crossfade (fade IN)
-    for (int x = beginStartX; x < beginEndX; ++x)
+    // Colors
+    Colour activeColour = Colour(0x66FFFFFF);
+    Colour fadeoutColour = Colour(0x30000000);
+    
+    float waveTop = (float)waveformBounds.getY();
+    float waveBottom = (float)waveformBounds.getBottom();
+    float waveHeight = (float)waveformBounds.getHeight();
+    
+    // ========== FADE IN PATH (at loop start) ==========
+    if (beginStartX < beginEndX && crossfadePixels > 0)
     {
-        float ratio = (float)(x - beginStartX) / (float)crossfadePixels;
-        float fadeIn = sinf(ratio * M_PI * 0.5f);
-        int fadeHeight = (int)(fadeIn * waveformBounds.getHeight());
+        Path fadeInDark, fadeInLight;
         
-        g.setColour(Colour(100, 255, 100).withAlpha(0.4f));
-        g.fillRect(x, waveformBounds.getBottom() - fadeHeight, 1, fadeHeight);
+        // Create the dark (top) region path
+        fadeInDark.startNewSubPath((float)beginStartX, waveTop);
+        
+        for (int x = beginStartX; x <= beginEndX; ++x)
+        {
+            float ratio = (float)(x - beginStartX) / (float)crossfadePixels;
+            float fadeIn = sinf(ratio * M_PI * 0.5f);
+            float y = waveTop + (waveHeight * (1.0f - fadeIn));
+            fadeInDark.lineTo((float)x, y);
+        }
+        
+        fadeInDark.lineTo((float)beginEndX, waveTop);
+        fadeInDark.closeSubPath();
+        
+        // Create the light (bottom) region path
+        fadeInLight.startNewSubPath((float)beginStartX, waveBottom);
+        
+        for (int x = beginStartX; x <= beginEndX; ++x)
+        {
+            float ratio = (float)(x - beginStartX) / (float)crossfadePixels;
+            float fadeIn = sinf(ratio * M_PI * 0.5f);
+            float y = waveTop + (waveHeight * (1.0f - fadeIn));
+            fadeInLight.lineTo((float)x, y);
+        }
+        
+        fadeInLight.lineTo((float)beginEndX, waveBottom);
+        fadeInLight.closeSubPath();
+        
+        // Draw the paths
+        g.setColour(fadeoutColour);
+        g.fillPath(fadeInDark);
+        
+        g.setColour(activeColour);
+        g.fillPath(fadeInLight);
     }
     
-    // Draw tail crossfade (fade OUT)
-    for (int x = tailStartX; x < tailEndX; ++x)
+    // ========== FADE OUT PATH (at loop end) ==========
+    if (tailStartX < tailEndX && crossfadePixels > 0)
     {
-        float ratio = (float)(x - tailStartX) / (float)crossfadePixels;
-        float fadeOut = cosf(ratio * M_PI * 0.5f);
-        int fadeHeight = (int)(fadeOut * waveformBounds.getHeight());
+        Path fadeOutDark, fadeOutLight;
         
-        g.setColour(Colour(255, 100, 100).withAlpha(0.4f));
-        g.fillRect(x, waveformBounds.getBottom() - fadeHeight, 1, fadeHeight);
+        // Create the dark (top) region path
+        fadeOutDark.startNewSubPath((float)tailStartX, waveTop);
+        
+        for (int x = tailStartX; x <= tailEndX; ++x)
+        {
+            float ratio = (float)(x - tailStartX) / (float)crossfadePixels;
+            float fadeOut = cosf(ratio * M_PI * 0.5f);
+            float y = waveTop + (waveHeight * (1.0f - fadeOut));
+            fadeOutDark.lineTo((float)x, y);
+        }
+        
+        fadeOutDark.lineTo((float)tailEndX, waveTop);
+        fadeOutDark.closeSubPath();
+        
+        // Create the light (bottom) region path
+        fadeOutLight.startNewSubPath((float)tailStartX, waveBottom);
+        
+        for (int x = tailStartX; x <= tailEndX; ++x)
+        {
+            float ratio = (float)(x - tailStartX) / (float)crossfadePixels;
+            float fadeOut = cosf(ratio * M_PI * 0.5f);
+            float y = waveTop + (waveHeight * (1.0f - fadeOut));
+            fadeOutLight.lineTo((float)x, y);
+        }
+        
+        fadeOutLight.lineTo((float)tailEndX, waveBottom);
+        fadeOutLight.closeSubPath();
+        
+        // Draw the paths
+        g.setColour(fadeoutColour);
+        g.fillPath(fadeOutDark);
+        
+        g.setColour(activeColour);
+        g.fillPath(fadeOutLight);
     }
     
-    // Draw crossfade boundary lines
-    g.setColour(Colours::orange.withAlpha(0.6f));
-    g.drawVerticalLine(beginEndX, waveformBounds.getY(), waveformBounds.getBottom());
-    g.drawVerticalLine(tailStartX, waveformBounds.getY(), waveformBounds.getBottom());
+    // ========== BOUNDARY INDICATORS ==========
+    Colour indicatorColour = Colour(0xFFEEEEEE);
+    
+    // Loop boundary lines
+    g.setColour(indicatorColour.withAlpha(0.8f));
+    if (loopStartPixel >= waveformBounds.getX() && loopStartPixel < waveformBounds.getRight())
+        g.drawVerticalLine(loopStartPixel, waveTop, waveBottom);
+    if (loopEndPixel > waveformBounds.getX() && loopEndPixel <= waveformBounds.getRight())
+        g.drawVerticalLine(loopEndPixel, waveTop, waveBottom);
+    
+    // Crossfade boundary lines (more subtle)
+    g.setColour(indicatorColour.withAlpha(0.5f));
+    if (beginEndX > waveformBounds.getX() && beginEndX < waveformBounds.getRight())
+        g.drawVerticalLine(beginEndX, waveTop, waveBottom);
+    if (tailStartX > waveformBounds.getX() && tailStartX < waveformBounds.getRight())
+        g.drawVerticalLine(tailStartX, waveTop, waveBottom);
 }
 
 void AudioLooperEditor::resized()

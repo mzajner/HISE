@@ -166,6 +166,14 @@ void AudioLooperVoice::calculateBlock(int startSample, int numSamples)
     SimpleReadWriteLock::ScopedReadLock sl(looper->getBuffer().getDataLock());
     auto sampleRange = looper->getBuffer().getCurrentRange();
     
+    // ADD THESE DEBUG LINES:
+    static Range<int> lastRange;
+    if (sampleRange != lastRange)
+    {
+        DBG("*** calculateBlock sees new range: " + String(sampleRange.getStart()) + " to " + String(sampleRange.getEnd()));
+        lastRange = sampleRange;
+    }
+    
     auto buffer = &looper->getAudioSampleBuffer();
     auto length = sampleRange.getLength();
     
@@ -188,6 +196,17 @@ void AudioLooperVoice::calculateBlock(int startSample, int numSamples)
     auto loopRange = looper->getBuffer().getLoopRange();
     int loopStart = jmax<int>(offset, loopRange.getStart());
     int loopEnd = jmin<int>(loopRange.getEnd(), sampleRange.getEnd());
+    
+    // ADD THESE DEBUG LINES:
+    static int lastLoopStart = -1;
+    static int lastLoopEnd = -1;
+    if (loopStart != lastLoopStart || loopEnd != lastLoopEnd)
+    {
+        DBG("*** Loop boundaries: start=" + String(loopStart) + ", end=" + String(loopEnd) +
+            ", offset=" + String(offset) + ", loopOffset=" + String(loopStart - offset));
+        lastLoopStart = loopStart;
+        lastLoopEnd = loopEnd;
+    }
     
     int actualLoopLength, crossfadeLength, effectiveLoopLength;
     bool shouldCrossfade;
@@ -227,7 +246,8 @@ void AudioLooperVoice::setupLoopParameters(int& loopStart, int& loopEnd, int& ac
     
     if (shouldCrossfade)
     {
-        crossfadeLength = (int)(actualLoopLength * looper->crossfadePercentage);
+        float limitedPercentage = looper->crossfadePercentage * 0.5f;
+        crossfadeLength = (int)(actualLoopLength * limitedPercentage);
         effectiveLoopLength = actualLoopLength - crossfadeLength;
         length = looper->isUsingLoop() ? effectiveLoopLength : length;
     }
@@ -442,14 +462,22 @@ void AudioLooperVoice::applyVoiceEffects(int startIndex, int samplesToCopy, bool
 #endif
 }
     
+
+// ============================================================================
+// IN AudioLooper.cpp - Find this method and add debug lines:
+// ============================================================================
 void AudioLooper::rangeChanged(AudioSampleBuffer* b, int areaIndex)
 {
+    DBG("========== AudioLooper::rangeChanged ==========");
+    DBG("Area: " + String(areaIndex));
+    
+    auto currentRange = getBuffer().getCurrentRange();
+    getBuffer().setLoopRange(currentRange, dontSendNotification);
     // This gets called when loop points change via GUI dragging
     resetCrossfadeState();
-    
-    // Optional debug output to see when this fires
-    DBG("Loop range changed - resetting crossfade state");
 }
+
+
 
 void AudioLooper::bufferReplaced(AudioSampleBuffer* b)
 {
@@ -595,28 +623,32 @@ void AudioLooper::setInternalAttribute(int parameterIndex, float newValue)
 
 	switch (parameterIndex)
 	{
-	case SyncMode:		setSyncMode((int)newValue); break;
-	case LoopEnabled:	setUseLoop(newValue > 0.5f);
-						break;
-	case RootNote:		rootNote = (int)newValue; break;
-	case PitchTracking:	pitchTrackingEnabled = newValue > 0.5f; break;
-	case SampleStartMod: sampleStartMod = jmax<int>(0, (int)newValue); break;
-	case Reversed:		reversed = newValue > 0.5f; break;
-    case LoopCrossfade:
-    {
-        // Add smoothing to prevent artifacts
-        static float lastCrossfadeValue = crossfadePercentage * 100.0f;
-        float newCrossfadeValue = newValue;
-        
-        // Only update if change is significant enough
-        if (abs(newCrossfadeValue - lastCrossfadeValue) > 0.5f)
+        case SyncMode:		setSyncMode((int)newValue); break;
+        case LoopEnabled:	setUseLoop(newValue > 0.5f);
+                            break;
+        case RootNote:		rootNote = (int)newValue; break;
+        case PitchTracking:	pitchTrackingEnabled = newValue > 0.5f; break;
+        case SampleStartMod: sampleStartMod = jmax<int>(0, (int)newValue); break;
+        case Reversed:		reversed = newValue > 0.5f; break;
+        case LoopCrossfade:
         {
-            setCrossfadePercentage(newValue / 100.0f);
-            resetCrossfadeState(); // Reset state when crossfade changes
-            lastCrossfadeValue = newCrossfadeValue;
+            static float lastCrossfadeValue = 0.0f;
+            float newCrossfadeValue = newValue / 100.0f;  // Convert to 0-1.0
+            
+            // Only update if change is significant (prevents micro-adjustments causing resets)
+            if (std::abs(newCrossfadeValue - lastCrossfadeValue) > 0.005f)  // 0.5% threshold
+            {
+                crossfadePercentage = newCrossfadeValue;
+                resetCrossfadeState();
+                lastCrossfadeValue = newCrossfadeValue;
+            }
+            else
+            {
+                // Small change - update value but don't reset state
+                crossfadePercentage = newCrossfadeValue;
+            }
+            break;
         }
-        break;
-    }
         default:			jassertfalse; break;
 	}
 }
