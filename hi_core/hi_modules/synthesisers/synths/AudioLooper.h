@@ -94,6 +94,11 @@ private:
 	friend class AudioLooper;
     bool isFirstLoop = true;
 
+    // Crossfade region indices relative to current loop
+    int headStart = 0;
+    int headEnd   = 0;
+    int tailStart = 0;
+    int tailEnd   = 0;
     
 	time_stretcher stretcher;
 

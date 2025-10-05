@@ -233,14 +233,28 @@ void AudioLooperVoice::calculateBlock(int startSample, int numSamples)
     applyVoiceEffects(startIndex, samplesToCopy, isLastVoice, length, loopOffset, isReversed);
 }
 
-void AudioLooperVoice::setupLoopParameters(int& loopStart, int& loopEnd, int& actualLoopLength,
-                                           int& crossfadeLength, int& effectiveLoopLength,
+void AudioLooperVoice::setupLoopParameters(int& loopStart, int& loopEnd,
+                                           int& actualLoopLength,
+                                           int& crossfadeLength,
+                                           int& effectiveLoopLength,
                                            int& length, bool& shouldCrossfade)
 {
     AudioLooper* looper = static_cast<AudioLooper*>(getOwnerSynth());
     
+    // ADD DEBUG HERE:
+    DBG("=== setupLoopParameters ===");
+    DBG("loopStart: " + String(loopStart) + ", loopEnd: " + String(loopEnd));
+    DBG("isUsingLoop: " + String(looper->isUsingLoop() ? 1 : 0));
+    DBG("crossfadePercentage: " + String(looper->crossfadePercentage));
+    DBG("reversed: " + String(looper->reversed ? 1 : 0));
+    
     shouldCrossfade = looper->isUsingLoop() && looper->crossfadePercentage > 0.0f && !looper->reversed;
+    
+    DBG("shouldCrossfade: " + String(shouldCrossfade ? 1 : 0));
+
     actualLoopLength = loopEnd - loopStart;
+    DBG("actualLoopLength: " + String(actualLoopLength));
+
     crossfadeLength = 0;
     effectiveLoopLength = actualLoopLength;
     
@@ -249,13 +263,22 @@ void AudioLooperVoice::setupLoopParameters(int& loopStart, int& loopEnd, int& ac
         float limitedPercentage = looper->crossfadePercentage * 0.5f;
         crossfadeLength = (int)(actualLoopLength * limitedPercentage);
         effectiveLoopLength = actualLoopLength - crossfadeLength;
-        length = looper->isUsingLoop() ? effectiveLoopLength : length;
+        
+        DBG("crossfadeLength: " + String(crossfadeLength));
+        DBG("effectiveLoopLength: " + String(effectiveLoopLength));
     }
-    else
-    {
-        length = looper->isUsingLoop() ? actualLoopLength : length;
-    }
+    
+    length = looper->isUsingLoop() ? effectiveLoopLength : length;
+    DBG("NO CROSSFADE - reason: loop=" + String(looper->isUsingLoop() ? 1 : 0) +
+        ", percentage=" + String(looper->crossfadePercentage) +
+        ", reversed=" + String(looper->reversed ? 1 : 0));
+    // NEW: define crossfade regions relative to loopStart
+    headStart = loopStart;
+    headEnd   = loopStart + crossfadeLength;
+    tailStart = loopEnd - crossfadeLength;
+    tailEnd   = loopEnd;
 }
+
 
 void AudioLooperVoice::processTempoSyncedPlayback(int startSample, int samplesToCopy,
                                                   const AudioSampleBuffer* buffer, int end)
@@ -357,68 +380,72 @@ void AudioLooperVoice::processSingleSample(int& startSample, int& numSamples, in
         return;
     }
     
-    const int samplePos = getAdjustedSamplePos(uptime, actualLoopLength, effectiveLoopLength, loopOffset, isReversed, end);
+    const int samplePos     = getAdjustedSamplePos(uptime, actualLoopLength, effectiveLoopLength, loopOffset, isReversed, end);
     const int nextSamplePos = getAdjustedSamplePos(uptime + 1, actualLoopLength, effectiveLoopLength, loopOffset, isReversed, end);
-
-    const float leftPrevSample = leftSamples[samplePos];
+    
+    const float leftPrevSample  = leftSamples[samplePos];
     const float rightPrevSample = rightSamples[samplePos];
-    const float leftNextSample = leftSamples[nextSamplePos];
+    const float leftNextSample  = leftSamples[nextSamplePos];
     const float rightNextSample = rightSamples[nextSamplePos];
     
     float leftSample, rightSample;
     
     if (samplePos >= 1 && nextSamplePos + 1 < buffer->getNumSamples())
     {
-        float leftPrev2 = leftSamples[samplePos - 1];
+        float leftPrev2  = leftSamples[samplePos - 1];
         float rightPrev2 = rightSamples[samplePos - 1];
-        float leftNext2 = leftSamples[nextSamplePos + 1];
+        float leftNext2  = leftSamples[nextSamplePos + 1];
         float rightNext2 = rightSamples[nextSamplePos + 1];
         
-        leftSample = Interpolator::interpolateCubic(leftPrev2, leftPrevSample, leftNextSample, leftNext2, (float)alpha);
+        leftSample  = Interpolator::interpolateCubic(leftPrev2, leftPrevSample, leftNextSample, leftNext2, (float)alpha);
         rightSample = Interpolator::interpolateCubic(rightPrev2, rightPrevSample, rightNextSample, rightNext2, (float)alpha);
     }
     else
     {
-        leftSample = Interpolator::interpolateLinear(leftPrevSample, leftNextSample, (float)alpha);
+        leftSample  = Interpolator::interpolateLinear(leftPrevSample, leftNextSample, (float)alpha);
         rightSample = Interpolator::interpolateLinear(rightPrevSample, rightNextSample, (float)alpha);
     }
     
+    // --- Crossfade handling ---
     if (shouldCrossfade && crossfadeLength > 0 && !isFirstLoop)
     {
         int posInEffectiveLoop = (uptime - loopStart) % effectiveLoopLength;
-        if (posInEffectiveLoop < 0) posInEffectiveLoop += effectiveLoopLength;
+        if (posInEffectiveLoop < 0)
+            posInEffectiveLoop += effectiveLoopLength;
         
-        // ONLY crossfade at the beginning
+        // Crossfade only at the start of the loop
         if (posInEffectiveLoop < crossfadeLength)
         {
             int offsetInCrossfade = posInEffectiveLoop;
             float ratio = (float)offsetInCrossfade / (float)crossfadeLength;
             
-            // Tail reads forwards from the end of the removed section
-            int tailSamplePos = loopStart + effectiveLoopLength + offsetInCrossfade;
+            // Tail region starts at tailStart (set in setupLoopParameters)
+            int tailSamplePos = tailStart + offsetInCrossfade;
             
-            if (tailSamplePos >= loopStart && tailSamplePos < buffer->getNumSamples() && tailSamplePos < (loopStart + actualLoopLength))
+            if (tailSamplePos >= loopStart &&
+                tailSamplePos < buffer->getNumSamples() &&
+                tailSamplePos < (loopStart + actualLoopLength))
             {
-                float leftTail = leftSamples[tailSamplePos];
+                float leftTail  = leftSamples[tailSamplePos];
                 float rightTail = rightSamples[tailSamplePos];
                 
-                if (tailSamplePos + 1 < buffer->getNumSamples() && tailSamplePos + 1 < (loopStart + actualLoopLength))
+                if (tailSamplePos + 1 < buffer->getNumSamples() &&
+                    tailSamplePos + 1 < (loopStart + actualLoopLength))
                 {
-                    leftTail = Interpolator::interpolateLinear(leftTail, leftSamples[tailSamplePos + 1], (float)alpha);
+                    leftTail  = Interpolator::interpolateLinear(leftTail, leftSamples[tailSamplePos + 1], (float)alpha);
                     rightTail = Interpolator::interpolateLinear(rightTail, rightSamples[tailSamplePos + 1], (float)alpha);
                 }
                 
-                // Beginning fades in, tail fades out
-                leftSample = leftSample * ratio + leftTail * (1.0f - ratio);
+                // Blend: tail fades out, head fades in
+                leftSample  = leftSample  * ratio + leftTail  * (1.0f - ratio);
                 rightSample = rightSample * ratio + rightTail * (1.0f - ratio);
             }
         }
     }
+    // --- End crossfade ---
     
     if (isFirstLoop && (uptime - loopStart) >= actualLoopLength)
-    {
         isFirstLoop = false;
-    }
     
     voiceBuffer.setSample(0, startSample, leftSample);
     voiceBuffer.setSample(1, startSample, rightSample);
@@ -428,6 +455,7 @@ void AudioLooperVoice::processSingleSample(int& startSample, int& numSamples, in
     const double pitchDelta = (uptimeDelta * (voicePitchValues == nullptr ? 1.0f : voicePitchValues[startSample]));
     voiceUptime += pitchDelta;
 }
+
 
 void AudioLooperVoice::applyVoiceEffects(int startIndex, int samplesToCopy, bool isLastVoice,
                                          int length, int loopOffset, bool isReversed)
