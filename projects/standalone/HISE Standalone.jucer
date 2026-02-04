@@ -4,7 +4,8 @@
               bundleIdentifier="com.hartinstruments.HISEStandalone" includeBinaryInAppConfig="1"
               companyName="Hart Instruments" companyWebsite="http://hise.audio"
               companyCopyright="Hart Instruments" displaySplashScreen="1" reportAppUsage="0"
-              splashScreenColour="Dark" cppLanguageStandard="17" jucerFormatVersion="1">
+              splashScreenColour="Dark" cppLanguageStandard="17" jucerFormatVersion="1"
+              defines="HISE_NUM_SCRIPTNODE_FX_MODS=8 HISE_NUM_POLYPHONIC_SCRIPTNODE_FX_MODS=0 HISE_NUM_SCRIPTNODE_SYNTH_MODS=0 NUM_HARDCODED_FX_MODS=8 NUM_HARDCODED_POLY_FX_MODS=0 NUM_HARDCODED_SYNTH_MODS=0">
   <MAINGROUP id="yomWt4" name="HISE Standalone">
     <GROUP id="{577963C7-1A49-BB2A-D701-52DC7A5895F7}" name="Source">
       <FILE id="Fw455d" name="ScriptNodeTestSuite.cpp" compile="1" resource="0"
