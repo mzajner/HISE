@@ -73,42 +73,56 @@ CustomKeyboard::CustomKeyboard(MainController* mc_) :
   lowKey(12),
 	currentKeyboardOctave(5)
 {
-	setKeyPressBaseOctave(currentKeyboardOctave);
-
-	state->addChangeListener(this);
-   
-	setColour(whiteNoteColourId, Colours::black);
-
-	ownedLaf = PresetHandler::createAlertWindowLookAndFeel();
-
-	if (dynamic_cast<CustomKeyboardLookAndFeelBase*>(ownedLaf.get()) == nullptr)
-		ownedLaf = new CustomKeyboardLookAndFeel();
-
-	setLookAndFeel(ownedLaf);
-
+    setKeyPressBaseOctave(currentKeyboardOctave);
+    
+    state->addChangeListener(this);
+    
+    setColour(whiteNoteColourId, Colours::black);
+    
+    ownedLaf = PresetHandler::createAlertWindowLookAndFeel();
+    
+    if (dynamic_cast<CustomKeyboardLookAndFeelBase*>(ownedLaf.get()) == nullptr)
+        ownedLaf = new CustomKeyboardLookAndFeel();
+    
+    setLookAndFeel(ownedLaf);
+    
     setOpaque(true);
-
+    
 #if HISE_IOS
-
-	setKeyWidth(75.0f);
-	setScrollButtonsVisible(false);
-
-	setAvailableRange(36, 36 + 21);
+    
+    setKeyWidth(75.0f);
+    setScrollButtonsVisible(false);
+    
+    setAvailableRange(36, 36 + 21);
     
 #else
-
-	
-
+    
+    
+    
     setKeyWidth(narrowKeys ? 14.0f : 18.0f);
-	setScrollButtonsVisible(false);
-	
-	setAvailableRange(9, 127);
-
+    setScrollButtonsVisible(false);
+    
+    setAvailableRange(9, 127);
+    
 #endif
-
-	
+    
+    clearKeyMappings();
+    
+    // White keys (bottom row): a s d f g h j - k l ; - octave 1+2
+    const char whites[] = { 'a','s','d','f','g','h','j','k','l',';' };
+    const int whiteOffsets[] = { 0,2,4,5,7,9,11,12,14,16 }; // C D E F G A B C D E
+    
+    // Black keys (top row): w e - t y u - o p
+    const char blacks[] = { 'w','e','t','y','u','o','p' };
+    const int blackOffsets[] = { 1,3,6,8,10,13,15 }; // C# D# F# G# A# C# D#
+    
+    for (int i = 0; i < 10; i++)
+        setKeyPressForNote(KeyPress(whites[i]), whiteOffsets[i]);
+    
+    for (int i = 0; i < 7; i++)
+        setKeyPressForNote(KeyPress(blacks[i]), blackOffsets[i]);
+    
 }
-
 
 
 CustomKeyboard::~CustomKeyboard()
@@ -198,31 +212,29 @@ void CustomKeyboard::mouseDrag(const MouseEvent& e)
 		MidiKeyboardComponent::mouseDrag(e);
 }
 
+// REPLACE WITH:
 bool CustomKeyboard::keyPressed(const KeyPress& key)
 {
-	// Handle Z key - decrease octave
-	if (key.getKeyCode() == 'z' || key.getKeyCode() == 'Z')
-	{
-		if (currentKeyboardOctave > 0)
-		{
-			currentKeyboardOctave--;
-			setKeyPressBaseOctave(currentKeyboardOctave);
-		}
-		return true;
-	}
-	// Handle X key - increase octave
-	else if (key.getKeyCode() == 'x' || key.getKeyCode() == 'X')
-	{
-		if (currentKeyboardOctave < 10)
-		{
-			currentKeyboardOctave++;
-			setKeyPressBaseOctave(currentKeyboardOctave);
-		}
-		return true;
-	}
-
-	// Let the parent class handle other keys (including the awsedftgyhujkolp; note keys)
-	return MidiKeyboardComponent::keyPressed(key);
+    if (key == KeyPress::upKey)
+    {
+        if (currentKeyboardOctave < 10)
+        {
+            currentKeyboardOctave++;
+            setKeyPressBaseOctave(currentKeyboardOctave);
+        }
+        return true;
+    }
+    else if (key == KeyPress::downKey)
+    {
+        if (currentKeyboardOctave > 0)
+        {
+            currentKeyboardOctave--;
+            setKeyPressBaseOctave(currentKeyboardOctave);
+        }
+        return true;
+    }
+    
+    return MidiKeyboardComponent::keyPressed(key);
 }
 
 void CustomKeyboard::setUseCustomGraphics(bool shouldUseCustomGraphics)
