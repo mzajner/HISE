@@ -108,19 +108,14 @@ CustomKeyboard::CustomKeyboard(MainController* mc_) :
     
     clearKeyMappings();
     
-    // White keys (bottom row): a s d f g h j - k l ; - octave 1+2
-    const char whites[] = { 'a','s','d','f','g','h','j','k','l',';' };
-    const int whiteOffsets[] = { 0,2,4,5,7,9,11,12,14,16 }; // C D E F G A B C D E
+    const char row1[] = { 'a','s','d','f','g','h','j','k','l',';','\'','\r' };
+    const char row2[] = { 'q','w','e','r','t','y','u','i','o','p','[',']' };
     
-    // Black keys (top row): w e - t y u - o p
-    const char blacks[] = { 'w','e','t','y','u','o','p' };
-    const int blackOffsets[] = { 1,3,6,8,10,13,15 }; // C# D# F# G# A# C# D#
-    
-    for (int i = 0; i < 10; i++)
-        setKeyPressForNote(KeyPress(whites[i]), whiteOffsets[i]);
-    
-    for (int i = 0; i < 7; i++)
-        setKeyPressForNote(KeyPress(blacks[i]), blackOffsets[i]);
+    for (int i = 0; i < 12; i++)
+    {
+        setKeyPressForNote(KeyPress(row1[i]), i);
+        setKeyPressForNote(KeyPress(row2[i]), i + 12);
+    }
     
 }
 
