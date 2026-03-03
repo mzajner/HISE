@@ -71,7 +71,7 @@ CustomKeyboard::CustomKeyboard(MainController* mc_) :
 	mc(mc_),
     narrowKeys(true),
   lowKey(12),
-	currentKeyboardOctave(5)
+	currentKeyboardOctave(4)
 {
     setKeyPressBaseOctave(currentKeyboardOctave);
     
@@ -107,9 +107,7 @@ CustomKeyboard::CustomKeyboard(MainController* mc_) :
 #endif
     
     clearKeyMappings();
-    
-    clearKeyMappings();
-    
+        
     // Octave 1 white (bottom row)
     const char w1[] = { 'z','x','c','v','b','n','m',',','.',';' };
     const int w1o[] =  {  0,  2,  4,  5,  7,  9, 11, 12, 14, 16 };
@@ -118,19 +116,19 @@ CustomKeyboard::CustomKeyboard(MainController* mc_) :
     const int b1o[] =  {  1,  3,  6,  8, 10, 13, 15 };
     
     // Octave 2 white (top row)
-    const char w2[] = { 'q','w','e','r','t','y','u','i','o','p','[',']' };
-    const int w2o[] =  { 12, 14, 16, 17, 19, 21, 23, 24, 26, 28, 29, 31 };
+    const char w2[] = { 'q','w','e','r','t','y','u','i','o','p' };
+    const int w2o[] =  { 12, 14, 16, 17, 19, 21, 23, 24, 26, 28 };
     // Octave 2 black
-    const char b2[] = { '2','3','5','6','7','9','0','-' };
-    const int b2o[] =  { 13, 15, 18, 20, 22, 25, 27, 30 };
+    const char b2[] = { '2','3','5','6','7','9','0' };
+    const int b2o[] =  { 13, 15, 18, 20, 22, 25, 27 };
     
     for (int i = 0; i < 10; i++)
         setKeyPressForNote(KeyPress(w1[i]), w1o[i]);
     for (int i = 0; i < 7; i++)
         setKeyPressForNote(KeyPress(b1[i]), b1o[i]);
-    for (int i = 0; i < 12; i++)
+    for (int i = 0; i < 10; i++)
         setKeyPressForNote(KeyPress(w2[i]), w2o[i]);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 7; i++)
         setKeyPressForNote(KeyPress(b2[i]), b2o[i]);
     
 }
