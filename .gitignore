@@ -137,3 +137,5 @@ tools/auto_build/installer
 hi_scripting/scripting/api/bx
 projects/standalone/HISE Standalone.jucer
 projects/standalone/JuceLibraryCode/AppConfig.h
+projects/standalone/HISE Standalone.jucer
+projects/standalone/JuceLibraryCode/AppConfig.h
