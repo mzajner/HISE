@@ -169,8 +169,28 @@ void CustomKeyboard::paint(Graphics &g)
 
 void CustomKeyboard::changeListenerCallback(SafeChangeBroadcaster*)
 {
-		
-	repaint();
+    int lowest = -1;
+    int highest = -1;
+    
+    for (int i = 0; i < 128; i++)
+    {
+        if (state->isNoteOnForChannels(getMidiChannelsToDisplay(), i))
+        {
+            if (lowest == -1) lowest = i;
+            highest = i;
+        }
+    }
+    
+    if (lowest != -1 && (lowest < lowKey || highest > lowKey + 28))
+    {
+        int newLow = (lowest / 12) * 12;
+        if (newLow + 28 > 127)
+            newLow = 127 - 28;
+        setAvailableRange(newLow, newLow + 28);
+        lowKey = newLow;
+    }
+    
+    repaint();
 }
 
 void CustomKeyboard::mouseDown(const MouseEvent& e)
@@ -230,6 +250,9 @@ bool CustomKeyboard::keyPressed(const KeyPress& key)
         {
             currentKeyboardOctave++;
             setKeyPressBaseOctave(currentKeyboardOctave);
+            int newLow = currentKeyboardOctave * 12;
+            if (newLow + 28 <= 127)
+                setAvailableRange(newLow, newLow + 28);
         }
         return true;
     }
@@ -239,6 +262,9 @@ bool CustomKeyboard::keyPressed(const KeyPress& key)
         {
             currentKeyboardOctave--;
             setKeyPressBaseOctave(currentKeyboardOctave);
+            int newLow = currentKeyboardOctave * 12;
+            if (newLow >= 0)
+                setAvailableRange(newLow, newLow + 28);
         }
         return true;
     }
