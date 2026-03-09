@@ -583,44 +583,33 @@ PluginParameterAudioProcessor::PluginParameterAudioProcessor(const String& name_
 AudioProcessor::BusesProperties PluginParameterAudioProcessor::getHiseBusProperties() const
 {
 #if HISE_MIDIFX_PLUGIN
-		return BusesProperties();
+	return BusesProperties();
 #endif
 
 #if FRONTEND_IS_PLUGIN
 #if HI_SUPPORT_MONO_CHANNEL_LAYOUT
-
-		auto m2s = BusesProperties().withInput("Input", AudioChannelSet::mono()).withOutput("Output", AudioChannelSet::stereo());
-		auto s2s = BusesProperties().withInput("Input", AudioChannelSet::stereo()).withOutput("Output", AudioChannelSet::stereo());	
-
 #if HI_SUPPORT_MONO_TO_STEREO
-		// FL Studio is at it again...
-		if(!PluginHostType().isFruityLoops())
-			return m2s;
-		else
-			return s2s;
+	// Mono to stereo without sidechain
+	return BusesProperties().withInput("Input", AudioChannelSet::mono()).withOutput("Output", AudioChannelSet::stereo());
 #else
-		return s2s;
+	// Stereo configuration including sidechain correctly
+	auto busProp = BusesProperties();
+	busProp = busProp.withInput("Main Input", AudioChannelSet::stereo());
+	busProp = busProp.withInput("Sidechain", AudioChannelSet::stereo()); // Ensure sidechain is added here
+	busProp = busProp.withOutput("Main Output", AudioChannelSet::stereo());
+	return busProp;
 #endif
 #else
-
-		constexpr int numChannels = HISE_NUM_FX_PLUGIN_CHANNELS;
-
-		auto busProp = BusesProperties();
-
-#ifdef HISE_SIDECHAIN_CHANNEL_LAYOUT
-        busProp = busProp.withInput("Input", AudioChannelSet::stereo())
-            .withInput("Sidechain", AudioChannelSet::stereo())
-            .withOutput("Output", AudioChannelSet::stereo());
-#else
-		for (int i = 0; i < numChannels; i += 2)
-			busProp = busProp.withInput("Input " + String(i+1), AudioChannelSet::stereo()).withOutput("Output " + String(i+1), AudioChannelSet::stereo());
-#endif
-
-		return busProp;
-		
+	// Handle the stereo configuration with sidechain when HI_SUPPORT_MONO_CHANNEL_LAYOUT is not defined
+	auto busProp = BusesProperties();
+	busProp = busProp.withInput("Main Input", AudioChannelSet::stereo());
+	busProp = busProp.withInput("Sidechain", AudioChannelSet::stereo()); // Sidechain
+	busProp = busProp.withOutput("Main Output", AudioChannelSet::stereo());
+	return busProp;
 #endif
 #else
 	auto busProp = BusesProperties();
+<<<<<<< HEAD
 
 #if HISE_JUCE8
 	auto isProTools = wrapperType == wrapperType_AAX;
@@ -630,14 +619,18 @@ AudioProcessor::BusesProperties PluginParameterAudioProcessor::getHiseBusPropert
 
 	// Protools is behaving really nasty and hiding the instrument plugin if it hasn't at least one input bus...
 	if (isProTools || FORCE_INPUT_CHANNELS)
+=======
+	if (getWrapperTypeBeingCreated() == wrapperType_AAX || FORCE_INPUT_CHANNELS)
+>>>>>>> 186d9cebe6af24117822e58e6e1cbea76c451037
 		busProp = busProp.withInput("Input", AudioChannelSet::stereo());
-		
-#if IS_STANDALONE_FRONTEND || IS_STANDALONE_APP
-    constexpr int numChannels = HISE_NUM_STANDALONE_OUTPUTS;
+
+
+#if IS_STANDALONE_FRONTEND
+	constexpr int numChannels = 2;
 #else
 	constexpr int numChannels = HISE_NUM_PLUGIN_CHANNELS;
 #endif
-    
+
 	for (int i = 0; i < numChannels; i += 2)
 		busProp = busProp.withOutput("Channel " + String(i + 1) + "+" + String(i + 2), AudioChannelSet::stereo());
 
@@ -648,38 +641,56 @@ AudioProcessor::BusesProperties PluginParameterAudioProcessor::getHiseBusPropert
 
 bool PluginParameterAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
+	auto mainInputChannels = layouts.getNumChannels(true, 0);
+	auto mainOutputChannels = layouts.getNumChannels(false, 0);
+
+	// Validate sidechain if it exists
+	auto sidechainChannels = layouts.getNumChannels(true, 1);  // Sidechain assumed to be the second set of inputs if present
+
+	if (getWrapperTypeBeingCreated() == wrapperType_AAX) {
+		// Specific AAX validation for sidechain
+		return (mainInputChannels == 2 && mainOutputChannels == 2 && sidechainChannels == 1);
+	}
+
+	// Validate configurations based on input/output counts
+	else if (mainInputChannels == 1 && mainOutputChannels == 1) {
+
+		return true;
+	}
+	else if (mainInputChannels == 2 && mainOutputChannels == 2) {
+
+		return true;
+	}
+
+	return false;
+
+	// Revert to using the original variable for other checks to avoid breaking existing logic
 	auto inputs = layouts.getMainInputChannels();
 	auto outputs = layouts.getMainOutputChannels();
-
-	ignoreUnused(inputs, outputs);
-
+	// Check both main and sidechain channel support
 #if HISE_MIDIFX_PLUGIN
-		return inputs == 0 && outputs == 0;
+	return inputs == 0 && outputs == 0;
 #endif
 
 #if FRONTEND_IS_PLUGIN
 #if HI_SUPPORT_MONO_CHANNEL_LAYOUT
 #if HI_SUPPORT_MONO_TO_STEREO
-		if (outputs == 1) return false; // only mono to stereo support
-		return (outputs == 2) && (inputs == 1 || inputs == 2);
+	if (outputs == 1) return false; // only mono to stereo support
+	return (outputs == 2) && (inputs == 1 || inputs == 2);
 #else
-		return (inputs == 1 && outputs == 1) ||
-			   (inputs == 2 && outputs == 2);
+	return (inputs == 1 && outputs == 1) ||
+		(inputs == 2 && outputs == 2);
 #endif
 #else
-		return inputs == 2 && outputs == 2;
+	return inputs == 2 && outputs == 2;
 #endif
-#else
-    
-#if IS_STANDALONE_FRONTEND || IS_STANDALONE_APP
-    return outputs == 2 || outputs == HISE_NUM_STANDALONE_OUTPUTS;
 #else
 	bool isStereo = (inputs == 2 || inputs == 0) && outputs == 2;
 	bool isMultiChannel = (inputs == HISE_NUM_PLUGIN_CHANNELS || inputs == 0) && (outputs == HISE_NUM_PLUGIN_CHANNELS);
 	return isStereo || isMultiChannel;
 #endif
-#endif
 }
+
 
 PluginParameterAudioProcessor::~PluginParameterAudioProcessor()
 {
