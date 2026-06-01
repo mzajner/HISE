@@ -423,8 +423,17 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 					gainValues[i] = 0.0f;
 			}
 
-			getMatrix().setGainValues(gainValues, true);
+			// target = post-effect level (output)
 			getMatrix().setGainValues(gainValues, false);
+
+#if ENABLE_ALL_PEAK_METERS
+			// source = pre-effect level (input), fed from currentValues populated above
+			gainValues[0] = currentValues.inL;
+			if (buffer.getNumChannels() > 1)
+				gainValues[1] = currentValues.inR;
+#endif
+
+			getMatrix().setGainValues(gainValues, true);
 		}
 	}
 
