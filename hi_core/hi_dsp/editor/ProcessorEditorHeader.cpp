@@ -54,12 +54,18 @@ ProcessorEditorHeader::ProcessorEditorHeader(ProcessorEditor *p) :
 	if (isHeaderOfChain() || isHeaderOfModulatorSynth())
 		drawColour = Colours::black;
 
+    addAndMakeVisible (inputMeter = new VuMeter());
+	inputMeter->setType(VuMeter::StereoHorizontal);
+	inputMeter->setColour (VuMeter::backgroundColour, Colour (0xFF333333));
+	inputMeter->setColour (VuMeter::ledColour, Colours::lightgrey);
+	inputMeter->setColour (VuMeter::outlineColour, drawColour.withAlpha(0.5f));
+
     addAndMakeVisible (valueMeter = new VuMeter());
 	valueMeter->setType(VuMeter::StereoHorizontal);
 	valueMeter->setColour (VuMeter::backgroundColour, Colour (0xFF333333));
 	valueMeter->setColour (VuMeter::ledColour, Colours::lightgrey);
 	valueMeter->setColour (VuMeter::outlineColour, drawColour.withAlpha(0.5f));
-	
+
 	startTimer(30);
 
     addAndMakeVisible (idLabel = new Label ("ID Label",
@@ -280,7 +286,16 @@ ProcessorEditorHeader::ProcessorEditorHeader(ProcessorEditor *p) :
 		valueMeter->setColour(VuMeter::ColourId::backgroundColour, Colours::black.withAlpha(0.2f));
 		valueMeter->setColour(VuMeter::ColourId::outlineColour, JUCE_LIVE_CONSTANT_OFF(Colour(0x50000000)));
 		valueMeter->setColour(VuMeter::ColourId::ledColour, JUCE_LIVE_CONSTANT_OFF(Colour(0xb6ffffff)));
+
+		inputMeter->setOpaque(false);
+		inputMeter->setColour(VuMeter::ColourId::backgroundColour, Colours::black.withAlpha(0.2f));
+		inputMeter->setColour(VuMeter::ColourId::outlineColour, JUCE_LIVE_CONSTANT_OFF(Colour(0x50000000)));
+		inputMeter->setColour(VuMeter::ColourId::ledColour, JUCE_LIVE_CONSTANT_OFF(Colour(0xb6ffffff)));
 	}
+
+	// Input metering is only populated by MasterEffectProcessor (currentValues.inL/inR),
+	// so only show the input meter for those headers.
+	inputMeter->setVisible(dynamic_cast<MasterEffectProcessor*>(getProcessor()) != nullptr);
 
 	checkSoloLabel();
 
@@ -317,6 +332,7 @@ ProcessorEditorHeader::~ProcessorEditorHeader()
 
 	getProcessor()->getMainController()->removeScriptListener(this);
 
+    inputMeter = nullptr;
     valueMeter = nullptr;
     idLabel = nullptr;
     typeLabel = nullptr;
@@ -651,8 +667,26 @@ void ProcessorEditorHeader::resized()
 
 	if (showValueMeter)
 	{
-		valueMeter->setBounds(x, yOffset2, getWidth() / 2 - x, 20);
-		x = valueMeter->getRight() + 3;
+		const bool showInputMeter = inputMeter->isVisible();
+
+		if (showInputMeter)
+		{
+			const int totalWidth = getWidth() / 2 - x;
+			const int meterWidth = (totalWidth - 3) / 2;
+
+			inputMeter->setBounds(x, yOffset2, meterWidth, 20);
+			valueMeter->setBounds(inputMeter->getRight() + 3, yOffset2, meterWidth, 20);
+			x = valueMeter->getRight() + 3;
+		}
+		else
+		{
+			valueMeter->setBounds(x, yOffset2, getWidth() / 2 - x, 20);
+			x = valueMeter->getRight() + 3;
+		}
+	}
+	else
+	{
+		inputMeter->setVisible(false);
 	}
 
 	bool shouldShowRoutingButton = !isInEffectSlot &&
@@ -955,6 +989,7 @@ void ProcessorEditorHeader::displayBypassedChain(bool isBypassed)
 {
 	bypassButton->setEnabled(isBypassed);
 	valueMeter->setEnabled(isBypassed);
+	inputMeter->setEnabled(isBypassed);
 }
 
 void ProcessorEditorHeader::enableChainHeader()
@@ -1043,8 +1078,12 @@ void ProcessorEditorHeader::timerCallback()
 		}
 		else
 		{
-			valueMeter->setPeak(getProcessor()->getDisplayValues().outL,
-				getProcessor()->getDisplayValues().outR);
+			const auto displayValues = getProcessor()->getDisplayValues();
+
+			valueMeter->setPeak(displayValues.outL, displayValues.outR);
+
+			if (inputMeter->isVisible())
+				inputMeter->setPeak(displayValues.inL, displayValues.inR);
 		}
 
 		update(false);

@@ -179,6 +179,7 @@ private:
 
 	ScopedPointer<ChainIcon> chainIcon;
 
+    ScopedPointer<VuMeter> inputMeter;
     ScopedPointer<VuMeter> valueMeter;
     ScopedPointer<Label> idLabel;
     ScopedPointer<Label> typeLabel;

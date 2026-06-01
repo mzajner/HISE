@@ -305,6 +305,13 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 			for (int i = 0; i < numChannelsToFadeIn; i++)
 				killBuffer->copyFromWithRamp(i, 0, stereoBuffer.getReadPointer(i), numSamples, start_inv, end_inv);
 
+#if ENABLE_ALL_PEAK_METERS
+			currentValues.inL = stereoBuffer.getMagnitude(0, 0, samplesToUse);
+
+			if (isStereo)
+				currentValues.inR = stereoBuffer.getMagnitude(1, 0, samplesToUse);
+#endif
+
 			applyEffect(stereoBuffer, 0, samplesToUse);
 			isTailing = !isSilent(stereoBuffer, 0, samplesToUse);
 
@@ -354,6 +361,8 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 					}
 
 #if ENABLE_ALL_PEAK_METERS
+					currentValues.inL = 0.0f;
+					currentValues.inR = 0.0f;
 					currentValues.outL = 0.0f;
 					currentValues.outR = 0.0f;
 #endif
@@ -365,6 +374,14 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 			}
 
 			masterState.currentlySuspended = false;
+
+#if ENABLE_ALL_PEAK_METERS
+			currentValues.inL = stereoBuffer.getMagnitude(0, 0, samplesToUse);
+
+			if (isStereo)
+				currentValues.inR = stereoBuffer.getMagnitude(1, 0, samplesToUse);
+#endif
+
 			applyEffect(stereoBuffer, 0, samplesToUse);
 
 			if (suspendAtSilence)
