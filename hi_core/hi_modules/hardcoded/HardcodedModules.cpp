@@ -256,6 +256,10 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 			if (silent)
 			{
 				getMatrix().handleDisplayValues(b, b, false);
+#if ENABLE_ALL_PEAK_METERS
+				currentValues.inL = currentValues.inR = 0.0f;
+				currentValues.outL = currentValues.outR = 0.0f;
+#endif
 				masterState.currentlySuspended = true;
 				return;
 			}
@@ -269,6 +273,16 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 
 	masterState.currentlySuspended = false;
 
+#if ENABLE_ALL_PEAK_METERS
+	// Snapshot input levels before DSP runs so source/target meter values diverge correctly.
+	AudioSampleBuffer inputSnapshot(b.getNumChannels(), b.getNumSamples());
+	for (int ch = 0; ch < b.getNumChannels(); ++ch)
+		inputSnapshot.copyFrom(ch, 0, b, ch, 0, b.getNumSamples());
+
+	currentValues.inL = b.getMagnitude(0, startSample, numSamples);
+	currentValues.inR = b.getNumChannels() > 1 ? b.getMagnitude(1, startSample, numSamples) : currentValues.inL;
+#endif
+
 	auto on = opaqueNode.get();
 
 	if(on != nullptr && channelCountMatches)
@@ -280,7 +294,13 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 		extraMods.processChunkedWithModulation(rd);
 	}
 
+#if ENABLE_ALL_PEAK_METERS
+	currentValues.outL = b.getMagnitude(0, startSample, numSamples);
+	currentValues.outR = b.getNumChannels() > 1 ? b.getMagnitude(1, startSample, numSamples) : currentValues.outL;
+	getMatrix().handleDisplayValues(inputSnapshot, b, true);
+#else
 	getMatrix().handleDisplayValues(b, b, false);
+#endif
 
 	if (canBeSuspended)
 	{
