@@ -384,6 +384,11 @@ private:
 	bool resetOnClose = false;
 	bool restServerInitialised = false;
 
+	// Starts the REST API server if it should run and isn't already up.
+	// Idempotent; called from both resized() and timerCallback() so REST start
+	// doesn't depend on GUI layout timing.
+	void ensureRestServerStarted();
+
 	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendRootWindow);
 
 	ScopedPointer<SuspendedOverlay> suspendedOverlay;

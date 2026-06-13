@@ -982,32 +982,8 @@ void BackendRootWindow::resized()
 #endif
 
 
-	auto bp = getBackendProcessor();
-	auto& restServer = bp->getRestServer();
-	
-	if (getTopLevelComponent() != nullptr && !getLocalBounds().isEmpty() && !restServerInitialised)
-	{
-		restServerInitialised = true;
-
-		// Only the main BackendProcessor owns the running REST server.
-		// Snippet browser instances share the main server's listener and
-		// must not bind a second socket on the same port.
-		if (!bp->isSnippetBrowser())
-		{
-			String corsOrigins = bp->getSettingsObject().getSetting(HiseSettings::Scripting::CorsAllowedOrigins).toString();
-
-			if (BackendProcessor::isUsingCommandLineServerMode())
-			{
-				restServer.start(bp->commandLineServerPort, "127.0.0.1", corsOrigins);
-			}
-			else if (bp->getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
-			{
-				// Auto-start REST API server if enabled in settings
-				int port = (int)bp->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
-				restServer.start(port, "127.0.0.1", corsOrigins);
-			}
-		}
-	}
+	if (getTopLevelComponent() != nullptr && !getLocalBounds().isEmpty())
+		ensureRestServerStarted();
 
 	
 
@@ -1018,9 +994,60 @@ void BackendRootWindow::showSettingsWindow()
 	BackendCommandTarget::Actions::showFileProjectSettings(this);
 }
 
+void BackendRootWindow::ensureRestServerStarted()
+{
+	// Start the REST API server deterministically, independent of resized()
+	// timing (a modal welcome screen or odd launch path could delay/skip the
+	// resized() call). Idempotent: latches only on a confirmed-running server,
+	// so a transient failure can be retried by a later caller.
+	if (restServerInitialised)
+		return;
+
+	auto bp = getBackendProcessor();
+
+	// Only the main BackendProcessor owns the running REST server. Snippet
+	// browser instances share it and must not bind a second socket on the port.
+	if (bp->isSnippetBrowser())
+		return;
+
+	auto& restServer = bp->getRestServer();
+
+	if (restServer.isRunning())
+	{
+		restServerInitialised = true;
+		return;
+	}
+
+	String corsOrigins = bp->getSettingsObject().getSetting(HiseSettings::Scripting::CorsAllowedOrigins).toString();
+
+	if (BackendProcessor::isUsingCommandLineServerMode())
+	{
+		restServer.start(bp->commandLineServerPort, "127.0.0.1", corsOrigins);
+	}
+	else
+	{
+		// Accept both the canonical "Yes" and a stored "1" (older settings files).
+		auto autoStart = bp->getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString();
+		if (autoStart == "Yes" || autoStart == "1" || autoStart == "true")
+		{
+			int port = (int)bp->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			restServer.start(port, "127.0.0.1", corsOrigins);
+		}
+	}
+
+	// Latch only if the server is actually up now, so a failed/skipped start
+	// can be retried on the next resized()/timer tick.
+	if (restServer.isRunning())
+		restServerInitialised = true;
+}
+
 void BackendRootWindow::timerCallback()
 {
 	stopTimer();
+
+	// Deterministic fallback: make sure REST is up even if resized() never ran
+	// with non-empty bounds before a modal screen appeared.
+	ensureRestServerStarted();
 
 	if(GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Other::ShowWelcomeScreen))
 	{
