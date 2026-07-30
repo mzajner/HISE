@@ -9908,12 +9908,62 @@ void ScriptingObjects::ScriptedMidiPlayer::PlaybackUpdater::playbackChanged(int 
 		dirty = true;
 }
 
+namespace MacroIds
+{
+#define DECLARE_ID(x) static const Identifier x(#x);
+	DECLARE_ID(MacroIndex);
+	DECLARE_ID(Processor);
+	DECLARE_ID(Attribute);
+	DECLARE_ID(CustomAutomation);
+#if HISE_USE_UPDATED_MACROS
+	DECLARE_ID(DisplayName);
+	DECLARE_ID(MappingMode);
+	DECLARE_ID(UseTable);
+	DECLARE_ID(TableData);
+	DECLARE_ID(Remove);
+	DECLARE_ID(Start);
+	DECLARE_ID(End);
+	DECLARE_ID(FullStart);
+	DECLARE_ID(FullEnd);
+	DECLARE_ID(Skew);
+	DECLARE_ID(Inverted);
+#endif
+#undef DECLARE_ID
+}
+
+#if HISE_USE_UPDATED_MACROS
+static void applyUpdatedMacroProperties(MacroControlBroadcaster::MacroControlledParameterData* pd, const var& obj)
+{
+	using MappingMode = MacroControlBroadcaster::MacroControlledParameterData::MappingMode;
+
+	if (obj.hasProperty(MacroIds::DisplayName))
+		pd->setDisplayName(obj[MacroIds::DisplayName].toString());
+
+	if (obj.hasProperty(MacroIds::MappingMode))
+		pd->setMappingMode((MappingMode)(int)obj[MacroIds::MappingMode]);
+
+	if (obj.hasProperty(MacroIds::TableData))
+	{
+		pd->getTable()->restoreData(obj[MacroIds::TableData].toString());
+
+		if (!obj.hasProperty(MacroIds::UseTable))
+			pd->setUseTable(true);
+	}
+
+	if (obj.hasProperty(MacroIds::UseTable))
+		pd->setUseTable((bool)obj[MacroIds::UseTable]);
+}
+#endif
+
 struct ScriptingObjects::ScriptedMacroHandler::Wrapper
 {
 	API_METHOD_WRAPPER_0(ScriptedMacroHandler, getMacroDataObject);
 	API_VOID_METHOD_WRAPPER_1(ScriptedMacroHandler, setMacroDataFromObject);
 	API_VOID_METHOD_WRAPPER_1(ScriptedMacroHandler, setUpdateCallback);
 	API_VOID_METHOD_WRAPPER_1(ScriptedMacroHandler, setExclusiveMode);
+#if HISE_USE_UPDATED_MACROS
+	API_VOID_METHOD_WRAPPER_4(ScriptedMacroHandler, setConnectionProperty);
+#endif
 };
 
 ScriptingObjects::ScriptedMacroHandler::ScriptedMacroHandler(ProcessorWithScriptingContent* sp):
@@ -9924,6 +9974,9 @@ ScriptingObjects::ScriptedMacroHandler::ScriptedMacroHandler(ProcessorWithScript
 	ADD_API_METHOD_1(setMacroDataFromObject);
 	ADD_API_METHOD_1(setUpdateCallback);
 	ADD_API_METHOD_1(setExclusiveMode);
+#if HISE_USE_UPDATED_MACROS
+	ADD_API_METHOD_4(setConnectionProperty);
+#endif
 
 	sp->getMainController_()->getMacroManager().getMacroChain()->addMacroConnectionListener(this);
 }
@@ -10002,20 +10055,87 @@ void ScriptingObjects::ScriptedMacroHandler::setExclusiveMode(bool shouldBeExclu
 	getScriptProcessor()->getMainController_()->getMacroManager().setExclusiveMode(shouldBeExclusive);
 }
 
+#if HISE_USE_UPDATED_MACROS
+void ScriptingObjects::ScriptedMacroHandler::setConnectionProperty(int macroIndex, var processorId, var attribute, var propertyObject)
+{
+	auto mc = getScriptProcessor()->getMainController_();
+
+	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+	if (!isPositiveAndBelow(macroIndex, numMacros))
+		reportScriptError("macroIndex must be between 0 and " + String(numMacros));
+
+	auto pId = processorId.toString();
+
+	auto p = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), pId);
+
+	if (p == nullptr)
+		reportScriptError("module with ID " + pId + " does not exist");
+
+	int parameterIndex = attribute.isString() ? (int)p->getParameterIndexForIdentifier(attribute.toString())
+											  : (int)attribute;
+
+	auto& mm = mc->getMacroManager();
+	auto md = mm.getMacroChain()->getMacroControlData(macroIndex);
+	auto pd = md->getParameterWithProcessorAndIndex(p, parameterIndex);
+
+	if (propertyObject.getProperty(MacroIds::Remove, false))
+	{
+		if (pd != nullptr)
+			md->removeParameter(pd->getParameterName(), p, sendNotificationAsync);
+
+		return;
+	}
+
+	if (pd == nullptr)
+	{
+		// no existing connection: this call creates one, so Start/End must be given
+		// explicitly - silently defaulting them to (0, 1) would create a connection
+		// that looks fine but never reaches most of the target's real range.
+		if (!propertyObject.hasProperty(MacroIds::Start) || !propertyObject.hasProperty(MacroIds::End))
+		{
+			reportScriptError("setConnectionProperty() must be called with Start and End when creating a new connection (macro "
+				+ String(macroIndex) + " -> " + pId + "." + attribute.toString() + ")");
+		}
+
+		DynamicObject::Ptr merged = new DynamicObject();
+
+		if (auto originalObject = propertyObject.getDynamicObject())
+			merged = originalObject->clone();
+
+		merged->setProperty(MacroIds::MacroIndex, macroIndex);
+		merged->setProperty(MacroIds::Processor, pId);
+		merged->setProperty(MacroIds::Attribute, parameterIndex);
+
+		setFromCallbackArg(var(merged.get()));
+	}
+	else
+	{
+		// existing connection: apply only the supplied properties
+		if (propertyObject.hasProperty(MacroIds::Start))
+			pd->setRangeStart((double)propertyObject[MacroIds::Start]);
+
+		if (propertyObject.hasProperty(MacroIds::End))
+			pd->setRangeEnd((double)propertyObject[MacroIds::End]);
+
+		if (propertyObject.hasProperty(MacroIds::Skew))
+			pd->setRangeSkew((double)propertyObject[MacroIds::Skew]);
+
+		if (propertyObject.hasProperty(MacroIds::Inverted))
+			pd->setInverted((bool)propertyObject[MacroIds::Inverted]);
+
+		applyUpdatedMacroProperties(pd, propertyObject);
+	}
+
+	mm.getMacroChain()->sendMacroConnectionChangeMessage(macroIndex, p, parameterIndex, true, sendNotificationAsync);
+}
+#endif
+
 void ScriptingObjects::ScriptedMacroHandler::handleAsyncUpdate()
 {
 	sendUpdateMessage(sendNotificationAsync);
 }
 
-namespace MacroIds
-{
-#define DECLARE_ID(x) static const Identifier x(#x);
-	DECLARE_ID(MacroIndex);
-	DECLARE_ID(Processor);
-	DECLARE_ID(Attribute);
-	DECLARE_ID(CustomAutomation);
-#undef DECLARE_ID
-}
 
 void ScriptingObjects::ScriptedMacroHandler::sendUpdateMessage(NotificationType n)
 {
@@ -10104,11 +10224,14 @@ void ScriptingObjects::ScriptedMacroHandler::setFromCallbackArg(const var& obj)
 			
 			auto& mm = getScriptProcessor()->getMainController_()->getMacroManager();
 
-			auto fr = RangeHelpers::getDoubleRange(obj, RangeHelpers::IdSet::MidiAutomationFull);
 			auto nr = RangeHelpers::getDoubleRange(obj, RangeHelpers::IdSet::MidiAutomation);
 
-			if (fr.getRange().isEmpty())
-				fr = nr;
+			// FullStart/FullEnd are optional - if the caller didn't supply them, fall back to
+			// the active range instead of the (0, 1) default that getDoubleRange() would return
+			// (that default used to leak through because it doesn't look "empty").
+			auto fr = (obj.hasProperty(MacroIds::FullStart) || obj.hasProperty(MacroIds::FullEnd))
+						? RangeHelpers::getDoubleRange(obj, RangeHelpers::IdSet::MidiAutomationFull)
+						: nr;
 
 			auto converterString = obj["converter"].toString();
 
@@ -10126,6 +10249,10 @@ void ScriptingObjects::ScriptedMacroHandler::setFromCallbackArg(const var& obj)
 			
 			if (nr.inv)
 				pd->setInverted(true);
+
+#if HISE_USE_UPDATED_MACROS
+			applyUpdatedMacroProperties(pd, obj);
+#endif
 		}
 		else
 		{
@@ -10154,34 +10281,52 @@ var ScriptingObjects::ScriptedMacroHandler::getCallbackArg(int macroIndex, Proce
 
 		auto& mm = getScriptProcessor()->getMainController_()->getMacroManager();
 
-		auto md = mm.getMacroChain()->getMacroControlData(macroIndex);
+		auto md = const_cast<MacroControlBroadcaster::MacroControlData*>(mm.getMacroChain()->getMacroControlData(macroIndex));
 
-		for (int i = 0; i < md->getNumParameters(); i++)
+		// only use the connection that matches this processor / parameter combination
+		// (iterating all connections would report the last connection's range for every entry)
+		if (auto pd = md->getParameterWithProcessorAndIndex(p, parameterIndex))
 		{
 			scriptnode::InvertableParameterRange nr;
-			nr.rng = md->getParameter(i)->getParameterRange();
-			nr.inv = md->getParameter(i)->isInverted();
+			nr.rng = pd->getParameterRange();
+			nr.inv = pd->isInverted();
 
-			if(md->getParameter(i)->isCustomAutomation())
+			if(pd->isCustomAutomation())
 			{
 				obj->setProperty(MacroIds::CustomAutomation, true);
 
-				auto automationId = md->getParameter(i)->getParameter();
+				auto automationId = pd->getParameter();
 
 				if(auto ptr = getScriptProcessor()->getMainController_()->getUserPresetHandler().getCustomAutomationData(automationId))
 				{
 					obj->setProperty(MacroIds::Attribute, ptr->id);
 				}
 			}
-			
+
 			scriptnode::InvertableParameterRange fr;
-			fr.rng = md->getParameter(i)->getTotalRange();
-			
+			fr.rng = pd->getTotalRange();
+
 			RangeHelpers::storeDoubleRange(v, fr, RangeHelpers::IdSet::MidiAutomationFull);
 			RangeHelpers::storeDoubleRange(v, nr, RangeHelpers::IdSet::MidiAutomation);
+
+#if HISE_USE_UPDATED_MACROS
+			using MappingMode = MacroControlBroadcaster::MacroControlledParameterData::MappingMode;
+
+			if (pd->getDisplayName().isNotEmpty())
+				obj->setProperty(MacroIds::DisplayName, pd->getDisplayName());
+
+			if (pd->getMappingMode() != MappingMode::Normal)
+				obj->setProperty(MacroIds::MappingMode, (int)pd->getMappingMode());
+
+			if (pd->isUsingTable())
+			{
+				obj->setProperty(MacroIds::UseTable, true);
+				obj->setProperty(MacroIds::TableData, pd->getTable()->exportData());
+			}
+#endif
 		}
 	}
-	
+
 	return v;
 }
 

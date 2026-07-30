@@ -2942,7 +2942,13 @@ namespace ScriptingObjects
 
 		/** Enables the "exclusive" mode for MIDI automation (only one active parameter for each controller). */
 		void setExclusiveMode(bool shouldBeExclusive);
-		
+
+#if HISE_USE_UPDATED_MACROS
+		/** Adds, updates or removes a single macro connection without rebuilding the other connections.
+		*   Supported properties: Start, End, Skew, Inverted, DisplayName, MappingMode, UseTable, TableData, Remove. */
+		void setConnectionProperty(int macroIndex, var processorId, var attribute, var propertyObject);
+#endif
+
 	private:
 
 		void handleAsyncUpdate() override;

@@ -142,6 +142,39 @@ public:
 		/** Returns the parameter name. This is the name of the interface control (Processor parameter have no name per se). */
 		String getParameterName() const;;
 
+#if HISE_USE_UPDATED_MACROS
+		enum class MappingMode
+		{
+			Normal = 0,
+			Bipolar,
+			numMappingModes
+		};
+
+		/** Sets a human readable name (eg. the `text` property of the connected UI component).
+		*   This is display-only — getParameterName() stays the connection key. */
+		void setDisplayName(const String& newDisplayName);
+
+		/** Returns the display name (empty if none was set). */
+		String getDisplayName() const;
+
+		/** Returns the display name, falling back to the parameter name. */
+		String getDisplayNameToShow() const;
+
+		void setMappingMode(MappingMode newMode);
+		MappingMode getMappingMode() const;
+
+		/** Sets the skew factor of the active mapping range. */
+		void setRangeSkew(double newSkew);
+		double getRangeSkew() const;
+
+		/** Enables mapping the macro input through the custom curve table. */
+		void setUseTable(bool shouldUseTable);
+		bool isUsingTable() const;
+
+		/** Returns the custom curve table (lazily created). */
+		SampleLookupTable* getTable();
+#endif
+
 		/** Exports all data as xml element which can be added as ValueTreeProperty. */
         
         void restoreFromValueTree(const ValueTree& v) override;
@@ -177,6 +210,18 @@ public:
 
 		bool readOnly;
 		bool customAutomation = false;
+
+#if HISE_USE_UPDATED_MACROS
+		// Recomputes the skew factor so the knob's centre lands on 0.0 (falling
+		// back to the arithmetic midpoint if 0.0 isn't inside the active range)
+		// whenever mappingMode == Bipolar. No-op otherwise.
+		void updateBipolarSkew();
+
+		String displayName;
+		MappingMode mappingMode = MappingMode::Normal;
+		bool useTable = false;
+		ScopedPointer<SampleLookupTable> customTable;
+#endif
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MacroControlledParameterData)
 		JUCE_DECLARE_WEAK_REFERENCEABLE(MacroControlledParameterData);

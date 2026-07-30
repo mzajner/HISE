@@ -565,6 +565,21 @@ Note that this is a dynamic preprocessor so you don't need to recompile HISE to 
 #define HISE_MACROS_ARE_PLUGIN_PARAMETERS 0
 #endif
 
+/** Config: HISE_USE_UPDATED_MACROS
+
+If enabled, the classic macro control system gets an extended feature set:
+- per-connection display name (UI components show their `text` property instead of the component ID)
+- per-connection bipolar mapping mode (macro center = range start, both extremes = range end)
+- per-connection custom curve table (like the LFO custom waveshape)
+- Skew / Mode / Curve editing columns in the FrontendMacroPanel
+- incremental scripting API (MacroHandler.setConnectionProperty)
+
+The serialization format stays backward compatible (new properties are only written when set).
+*/
+#ifndef HISE_USE_UPDATED_MACROS
+#define HISE_USE_UPDATED_MACROS 1
+#endif
+
 /** Config: HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION
 
 If enabled, the plugin will use the MIDI channel information from CC messages when assigning a CC to a control. The default is disabled for backwards compatibility

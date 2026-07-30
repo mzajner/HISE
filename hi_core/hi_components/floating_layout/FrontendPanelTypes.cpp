@@ -1534,13 +1534,89 @@ juce::String FrontendMacroPanel::getCellText(int rowNumber, int columnId) const
 	if (auto data = connectionList[rowNumber].get())
 	{
 		if (columnId == ColumnId::ParameterName)
+		{
+#if HISE_USE_UPDATED_MACROS
+			return data->getDisplayNameToShow();
+#else
 			return data->getParameterName();
+#endif
+		}
 		else if (columnId == ColumnId::CCNumber)
 			return getData(data)->getMacroName();
 	}
 
 	return {};
 }
+
+#if HISE_USE_UPDATED_MACROS
+double FrontendMacroPanel::getSkew(int rowIndex) const
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	if (auto data = connectionList[rowIndex].get())
+		return data->getRangeSkew();
+
+	return 1.0;
+}
+
+void FrontendMacroPanel::setSkew(int rowIndex, double newSkew)
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	if (auto data = connectionList[rowIndex].get())
+		data->setRangeSkew(newSkew);
+}
+
+bool FrontendMacroPanel::isBipolar(int rowIndex) const
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	using MappingMode = MacroControlBroadcaster::MacroControlledParameterData::MappingMode;
+
+	if (auto data = connectionList[rowIndex].get())
+		return data->getMappingMode() == MappingMode::Bipolar;
+
+	return false;
+}
+
+void FrontendMacroPanel::setBipolar(int rowIndex, bool shouldBeBipolar)
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	using MappingMode = MacroControlBroadcaster::MacroControlledParameterData::MappingMode;
+
+	if (auto data = connectionList[rowIndex].get())
+		data->setMappingMode(shouldBeBipolar ? MappingMode::Bipolar : MappingMode::Normal);
+}
+
+Table* FrontendMacroPanel::getCurveTable(int rowIndex)
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	if (auto data = connectionList[rowIndex].get())
+		return data->getTable();
+
+	return nullptr;
+}
+
+bool FrontendMacroPanel::isUsingCurve(int rowIndex) const
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	if (auto data = connectionList[rowIndex].get())
+		return data->isUsingTable();
+
+	return false;
+}
+
+void FrontendMacroPanel::setUsingCurve(int rowIndex, bool shouldUseCurve)
+{
+	hise::SimpleReadWriteLock::ScopedReadLock sl(connectionLock);
+
+	if (auto data = connectionList[rowIndex].get())
+		data->setUseTable(shouldUseCurve);
+}
+#endif
 
 MidiLearnPanel::MidiLearnPanel(FloatingTile* parent) :
 	TableFloatingTileBase(parent),
@@ -1684,6 +1760,130 @@ void TableFloatingTileBase::InvertedButton::buttonClicked(Button *b)
 	owner.setInverted(row, b->getToggleState());
 }
 
+#if HISE_USE_UPDATED_MACROS
+TableFloatingTileBase::ModeButton::ModeButton(TableFloatingTileBase &owner_) :
+	owner(owner_)
+{
+	laf.setFontForAll(owner.font);
+
+	addAndMakeVisible(t = new TextButton("Unipolar"));
+	t->setButtonText("Unipolar");
+	t->setLookAndFeel(&laf);
+	t->setConnectedEdges(Button::ConnectedOnLeft | Button::ConnectedOnRight);
+	t->addListener(this);
+	t->setTooltip("Toggle bipolar mapping (macro center = range start, both extremes = range end).");
+	t->setColour(TextButton::buttonColourId, Colour(0x88000000));
+	t->setColour(TextButton::buttonOnColourId, Colour(0x88FFFFFF));
+	t->setColour(TextButton::textColourOnId, Colour(0xaa000000));
+	t->setColour(TextButton::textColourOffId, Colour(0x99ffffff));
+
+	t->setClickingTogglesState(true);
+}
+
+void TableFloatingTileBase::ModeButton::resized()
+{
+	t->setBounds(getLocalBounds().reduced(1));
+}
+
+void TableFloatingTileBase::ModeButton::setRowAndColumn(const int newRow, bool isBipolar)
+{
+	row = newRow;
+
+	t->setToggleState(isBipolar, dontSendNotification);
+	t->setButtonText(isBipolar ? "Bipolar" : "Unipolar");
+}
+
+void TableFloatingTileBase::ModeButton::buttonClicked(Button *b)
+{
+	t->setButtonText(b->getToggleState() ? "Bipolar" : "Unipolar");
+	owner.setBipolar(row, b->getToggleState());
+}
+
+struct TableFloatingTileBase::CurveButton::CurvePopup : public Component
+{
+	CurvePopup(TableFloatingTileBase& owner_, int row_):
+		owner(&owner_),
+		row(row_),
+		editor(nullptr, owner_.getCurveTable(row_))
+	{
+		addAndMakeVisible(enableButton = new TextButton("Enabled"));
+		enableButton->setClickingTogglesState(true);
+		enableButton->setToggleState(owner_.isUsingCurve(row_), dontSendNotification);
+		enableButton->setButtonText(owner_.isUsingCurve(row_) ? "Enabled" : "Disabled");
+		enableButton->setColour(TextButton::buttonColourId, Colour(0x88000000));
+		enableButton->setColour(TextButton::buttonOnColourId, Colour(SIGNAL_COLOUR));
+
+		enableButton->onClick = [this]()
+		{
+			if (owner.getComponent() != nullptr)
+			{
+				auto isOn = enableButton->getToggleState();
+
+				enableButton->setButtonText(isOn ? "Enabled" : "Disabled");
+				owner->setUsingCurve(row, isOn);
+				owner->updateContent();
+			}
+		};
+
+		addAndMakeVisible(editor);
+		editor.setUseFlatDesign(true);
+
+		setSize(320, 200);
+	}
+
+	void resized() override
+	{
+		auto b = getLocalBounds();
+		enableButton->setBounds(b.removeFromTop(24).removeFromLeft(90).reduced(2));
+		editor.setBounds(b.reduced(2));
+	}
+
+	Component::SafePointer<TableFloatingTileBase> owner;
+	int row;
+	TableEditor editor;
+	ScopedPointer<TextButton> enableButton;
+};
+
+TableFloatingTileBase::CurveButton::CurveButton(TableFloatingTileBase &owner_) :
+	owner(owner_)
+{
+	laf.setFontForAll(owner.font);
+
+	addAndMakeVisible(t = new TextButton("Curve"));
+	t->setButtonText("Curve");
+	t->setLookAndFeel(&laf);
+	t->setConnectedEdges(Button::ConnectedOnLeft | Button::ConnectedOnRight);
+	t->addListener(this);
+	t->setTooltip("Edit the custom mapping curve for this connection.");
+	t->setColour(TextButton::buttonColourId, Colour(0x88000000));
+	t->setColour(TextButton::buttonOnColourId, Colour(0x88FFFFFF));
+	t->setColour(TextButton::textColourOnId, Colour(0xaa000000));
+	t->setColour(TextButton::textColourOffId, Colour(0x99ffffff));
+}
+
+void TableFloatingTileBase::CurveButton::resized()
+{
+	t->setBounds(getLocalBounds().reduced(1));
+}
+
+void TableFloatingTileBase::CurveButton::setRowAndColumn(const int newRow, bool isUsingCurve)
+{
+	row = newRow;
+
+	t->setToggleState(isUsingCurve, dontSendNotification);
+	t->setButtonText(isUsingCurve ? "Curve (on)" : "Curve");
+}
+
+void TableFloatingTileBase::CurveButton::buttonClicked(Button *b)
+{
+	if (owner.getCurveTable(row) == nullptr)
+		return;
+
+	auto content = std::make_unique<CurvePopup>(owner, row);
+	CallOutBox::launchAsynchronously(std::move(content), getScreenBounds(), nullptr);
+}
+#endif
+
 TableFloatingTileBase::ValueSliderColumn::ValueSliderColumn(TableFloatingTileBase &table) :
 	owner(table)
 {
@@ -1779,6 +1979,16 @@ void TableFloatingTileBase::initTable(bool addChannelColumn)
 	table.getHeader().addColumn("Inverted", Inverted, 70, 70, 70);
 	table.getHeader().addColumn("Min", Minimum, 70, 70, 70);
 	table.getHeader().addColumn("Max", Maximum, 70, 70, 70);
+
+#if HISE_USE_UPDATED_MACROS
+	if (showUpdatedMacroColumns())
+	{
+		table.getHeader().addColumn("Skew", Skew, 70, 70, 70);
+		table.getHeader().addColumn("Mode", Mode, 70, 70, 70);
+		table.getHeader().addColumn("Curve", Curve, 70, 70, 70);
+	}
+#endif
+
 	table.getHeader().setStretchToFitActive(true);
 }
 
@@ -1988,7 +2198,13 @@ double TableFloatingTileBase::setRangeValue(int row, ColumnId column, double new
 				return newRangeValue;
 			}
 		}
-
+#if HISE_USE_UPDATED_MACROS
+		else if (column == Skew)
+		{
+			setSkew(row, newRangeValue);
+			return newRangeValue;
+		}
+#endif
 		else jassertfalse;
 	}
 
@@ -2069,6 +2285,63 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 
 		return slider;
 	}
+#if HISE_USE_UPDATED_MACROS
+	else if (columnId == Skew)
+	{
+		ValueSliderColumn* slider = dynamic_cast<ValueSliderColumn*> (existingComponentToUpdate);
+
+		if (slider == nullptr)
+			slider = new ValueSliderColumn(*this);
+
+		NormalisableRange<double> skewRange(0.125, 8.0);
+		skewRange.setSkewForCentre(1.0);
+
+		slider->slider->setDoubleClickReturnValue(true, 1.0);
+		slider->slider->setColour(Slider::ColourIds::backgroundColourId, Colours::transparentBlack);
+		slider->slider->setColour(Slider::ColourIds::thumbColourId, itemColour1);
+		slider->slider->setColour(Slider::ColourIds::textBoxTextColourId, textColour);
+
+		slider->setRowAndColumn(rowNumber, (ColumnId)columnId, getSkew(rowNumber), skewRange);
+
+		slider->slider->textFromValueFunction = std::function<String(double)>();
+		slider->slider->valueFromTextFunction = std::function<double(const String&)>();
+		slider->slider->setNumDecimalPlacesToDisplay(2);
+
+		return slider;
+	}
+	else if (columnId == Mode)
+	{
+		ModeButton* b = dynamic_cast<ModeButton*> (existingComponentToUpdate);
+
+		if (b == nullptr)
+			b = new ModeButton(*this);
+
+		b->t->setColour(TextButton::buttonOnColourId, itemColour1);
+		b->t->setColour(TextButton::textColourOnId, textColour);
+		b->t->setColour(TextButton::buttonColourId, Colours::transparentBlack);
+		b->t->setColour(TextButton::textColourOffId, textColour);
+
+		b->setRowAndColumn(rowNumber, isBipolar(rowNumber));
+
+		return b;
+	}
+	else if (columnId == Curve)
+	{
+		CurveButton* b = dynamic_cast<CurveButton*> (existingComponentToUpdate);
+
+		if (b == nullptr)
+			b = new CurveButton(*this);
+
+		b->t->setColour(TextButton::buttonOnColourId, itemColour1);
+		b->t->setColour(TextButton::textColourOnId, textColour);
+		b->t->setColour(TextButton::buttonColourId, Colours::transparentBlack);
+		b->t->setColour(TextButton::textColourOffId, textColour);
+
+		b->setRowAndColumn(rowNumber, isUsingCurve(rowNumber));
+
+		return b;
+	}
+#endif
 	else if (columnId == Inverted)
 	{
 		InvertedButton* b = dynamic_cast<InvertedButton*> (existingComponentToUpdate);

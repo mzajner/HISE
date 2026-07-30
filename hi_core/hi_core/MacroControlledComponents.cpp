@@ -92,7 +92,17 @@ bool MacroControlledObject::checkLearnMode()
 			suffix = asSlider->getTextValueSuffix();
 
 		GET_MACROCHAIN()->addControlledParameter(currentlyActiveLearnIndex, getProcessor()->getId(), parameter, name, getValueToTextConverter(), getRange());
-			
+
+#if HISE_USE_UPDATED_MACROS
+		if (macroDisplayName.isNotEmpty())
+		{
+			auto mData = GET_MACROCHAIN()->getMacroControlData(currentlyActiveLearnIndex);
+
+			if (auto pd = mData->getParameterWithProcessorAndIndex(getProcessor(), parameter))
+				pd->setDisplayName(macroDisplayName);
+		}
+#endif
+
 		return true;
 	}
 
@@ -340,7 +350,17 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 		if (customId.isValid())
 			nameToUse = customId.toString();
 
-		getProcessor()->getMainController()->getMacroManager().getMacroChain()->getMacroControlData(macroIndex)->addParameter(getProcessor(), parameterToUse, nameToUse, getValueToTextConverter(), rangeWithSkew, false, customId.isValid());
+		auto mData = getProcessor()->getMainController()->getMacroManager().getMacroChain()->getMacroControlData(macroIndex);
+
+		mData->addParameter(getProcessor(), parameterToUse, nameToUse, getValueToTextConverter(), rangeWithSkew, false, customId.isValid());
+
+#if HISE_USE_UPDATED_MACROS
+		if (macroDisplayName.isNotEmpty() && !customId.isValid())
+		{
+			if (auto pd = mData->getParameterWithProcessorAndIndex(getProcessor(), parameterToUse))
+				pd->setDisplayName(macroDisplayName);
+		}
+#endif
 
 		initMacroControl(sendNotification);
 	}

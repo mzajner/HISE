@@ -341,6 +341,14 @@ public:
 
 	void initMacroControl(NotificationType notify);
 
+#if HISE_USE_UPDATED_MACROS
+	/** Sets a human readable name (eg. the `text` property of a scripted component) that new
+	*   macro connections will use as display name instead of the component ID. */
+	void setMacroDisplayName(const String& newDisplayName) { macroDisplayName = newDisplayName; }
+
+	String getMacroDisplayName() const { return macroDisplayName; }
+#endif
+
 	virtual void addToMacroController(int newMacroIndex);;
 
 	virtual void removeFromMacroController();
@@ -424,6 +432,10 @@ private:
 	
 	int macroIndex;
 	String name;
+
+#if HISE_USE_UPDATED_MACROS
+	String macroDisplayName;
+#endif
 
 	bool macroControlledComponentEnabled;
 

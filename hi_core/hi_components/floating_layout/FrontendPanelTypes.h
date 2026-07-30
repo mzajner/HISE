@@ -708,6 +708,11 @@ public:
 		Inverted,
 		Minimum,
 		Maximum,
+#if HISE_USE_UPDATED_MACROS
+		Skew,
+		Mode,
+		Curve,
+#endif
 		numColumns,
 		columnWidthRatio
 	};
@@ -743,6 +748,21 @@ public:
 	virtual ValueToTextConverter getValueToTextConverter(int rowIndex) const = 0;
 
 	virtual void setInverted(int rowIndex, bool value) = 0;
+
+#if HISE_USE_UPDATED_MACROS
+	/** Return true to show the Skew / Mode / Curve editing columns. */
+	virtual bool showUpdatedMacroColumns() const { return false; }
+
+	virtual double getSkew(int rowIndex) const { return 1.0; }
+	virtual void setSkew(int rowIndex, double newSkew) {}
+
+	virtual bool isBipolar(int rowIndex) const { return false; }
+	virtual void setBipolar(int rowIndex, bool shouldBeBipolar) {}
+
+	virtual Table* getCurveTable(int rowIndex) { return nullptr; }
+	virtual bool isUsingCurve(int rowIndex) const { return false; }
+	virtual void setUsingCurve(int rowIndex, bool shouldUseCurve) {}
+#endif
 
 	virtual String getIndexName() const = 0;
 	virtual String getCellText(int rowNumber, int columnId) const = 0;
@@ -846,6 +866,52 @@ protected:
 		HiPropertyPanelLookAndFeel laf;
 	};
 
+#if HISE_USE_UPDATED_MACROS
+	class ModeButton : public Component,
+		public ButtonListener
+	{
+	public:
+
+		ModeButton(TableFloatingTileBase &owner_);
+
+		void resized() override;
+		void setRowAndColumn(const int newRow, bool isBipolar);
+		void buttonClicked(Button *b) override;
+
+		ScopedPointer<TextButton> t;
+
+	private:
+
+		TableFloatingTileBase &owner;
+
+		int row;
+		HiPropertyPanelLookAndFeel laf;
+	};
+
+	class CurveButton : public Component,
+		public ButtonListener
+	{
+	public:
+
+		CurveButton(TableFloatingTileBase &owner_);
+
+		void resized() override;
+		void setRowAndColumn(const int newRow, bool isUsingCurve);
+		void buttonClicked(Button *b) override;
+
+		ScopedPointer<TextButton> t;
+
+	private:
+
+		struct CurvePopup;
+
+		TableFloatingTileBase &owner;
+
+		int row;
+		HiPropertyPanelLookAndFeel laf;
+	};
+#endif
+
 	TableListBox table;     // the table component itself
 	Font font;
 	int numRows;            // The number of rows of data we've got
@@ -936,7 +1002,21 @@ struct FrontendMacroPanel : public TableFloatingTileBase,
 	bool isUsed(int rowIndex) const;
 	void setInverted(int row, bool value);
 	String getCellText(int rowNumber, int columnId) const override;
-	
+
+#if HISE_USE_UPDATED_MACROS
+	bool showUpdatedMacroColumns() const override { return true; }
+
+	double getSkew(int rowIndex) const override;
+	void setSkew(int rowIndex, double newSkew) override;
+
+	bool isBipolar(int rowIndex) const override;
+	void setBipolar(int rowIndex, bool shouldBeBipolar) override;
+
+	Table* getCurveTable(int rowIndex) override;
+	bool isUsingCurve(int rowIndex) const override;
+	void setUsingCurve(int rowIndex, bool shouldUseCurve) override;
+#endif
+
 	mutable hise::SimpleReadWriteLock connectionLock;
 	Array<WeakReference<MacroControlBroadcaster::MacroControlledParameterData>> connectionList;
 

@@ -402,6 +402,10 @@ scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const var& obj
 			v.setProperty(r, obj[r], nullptr);
 	}
 
+	// the Inverted flag is stored outside the range id set (see storeDoubleRange)
+	if (obj.hasProperty(PropertyIds::Inverted))
+		v.setProperty(PropertyIds::Inverted, obj[PropertyIds::Inverted], nullptr);
+
 	return getDoubleRange(v, set);
 }
 

@@ -537,6 +537,10 @@ ScriptCreatedComponentWrapper(content, index)
 
 	s->setup(getProcessor(), getIndex(), sc->name.toString());
 
+#if HISE_USE_UPDATED_MACROS
+	s->setMacroDisplayName(sc->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::text).toString());
+#endif
+
     if(auto obj = sc->modObject.getDynamicObject())
         s->setModifierObject(sc->modObject);
     
@@ -1129,6 +1133,11 @@ ScriptCreatedComponentWrapper(content, index)
 	HiComboBox *cb = new HiComboBox(scriptComboBox->name.toString());
 
 	cb->setup(getProcessor(), getIndex(), scriptComboBox->name.toString());
+
+#if HISE_USE_UPDATED_MACROS
+	cb->setMacroDisplayName(scriptComboBox->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::text).toString());
+#endif
+
 	cb->addListener(this);
 	cb->setLookAndFeel(&plaf);
 
@@ -1250,6 +1259,10 @@ ScriptCreatedComponentWrapper(content, index)
 	b->addListener(this);
 	
 	b->setup(getProcessor(), getIndex(), sb->name.toString());
+
+#if HISE_USE_UPDATED_MACROS
+	b->setMacroDisplayName(sb->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::text).toString());
+#endif
 
 	if (sb->getPopupData().isObject())
 	{

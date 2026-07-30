@@ -63,10 +63,20 @@ namespace hise { using namespace juce;
 	{return parameterRange;}
 
 	void MacroControlBroadcaster::MacroControlledParameterData::setRangeStart(double min)
-	{parameterRange.start = min; }
+	{
+		parameterRange.start = min;
+#if HISE_USE_UPDATED_MACROS
+		updateBipolarSkew();
+#endif
+	}
 
 	void MacroControlBroadcaster::MacroControlledParameterData::setRangeEnd(double max)
-	{	parameterRange.end = max; }
+	{
+		parameterRange.end = max;
+#if HISE_USE_UPDATED_MACROS
+		updateBipolarSkew();
+#endif
+	}
 
 	Processor* MacroControlBroadcaster::MacroControlledParameterData::getProcessor()
 	{return controlledProcessor.get(); }
@@ -448,12 +458,101 @@ double MacroControlBroadcaster::MacroControlledParameterData::getParameterRangeL
 
 float MacroControlBroadcaster::MacroControlledParameterData::getNormalizedValue(double normalizedSliderInput)
 {
-	return (float)(parameterRange.convertFrom0to1 ( inverted ? (1.0 - normalizedSliderInput) : normalizedSliderInput));
+	double x = inverted ? (1.0 - normalizedSliderInput) : normalizedSliderInput;
 
-	
-	//return inverted ? (float)(parameterRange.getEnd() - normalizedSliderInput * parameterRange.getLength()):
-	//				  (float)(parameterRange.getStart() + normalizedSliderInput * parameterRange.getLength());
+	// Bipolar mode does not change the transfer curve - it just guarantees (via
+	// updateBipolarSkew()) that the knob's center (x=0.5) lands on the arithmetic
+	// midpoint of the active range, exactly like any other centre-detented control.
+
+#if HISE_USE_UPDATED_MACROS
+	if (useTable && customTable != nullptr)
+		x = (double)customTable->getInterpolatedValue(jlimit(0.0, 1.0, x), sendNotificationAsync);
+#endif
+
+	return (float)(parameterRange.convertFrom0to1(jlimit(0.0, 1.0, x)));
 };
+
+#if HISE_USE_UPDATED_MACROS
+void MacroControlBroadcaster::MacroControlledParameterData::setDisplayName(const String& newDisplayName)
+{
+	displayName = newDisplayName;
+}
+
+String MacroControlBroadcaster::MacroControlledParameterData::getDisplayName() const
+{
+	return displayName;
+}
+
+String MacroControlBroadcaster::MacroControlledParameterData::getDisplayNameToShow() const
+{
+	return displayName.isNotEmpty() ? displayName : parameterName;
+}
+
+void MacroControlBroadcaster::MacroControlledParameterData::setMappingMode(MappingMode newMode)
+{
+	mappingMode = (MappingMode)jlimit(0, (int)MappingMode::numMappingModes - 1, (int)newMode);
+	updateBipolarSkew();
+}
+
+void MacroControlBroadcaster::MacroControlledParameterData::updateBipolarSkew()
+{
+	if (mappingMode != MappingMode::Bipolar)
+		return;
+
+	// Bipolar means "the knob's centre is the neutral (zero) value", not merely
+	// the arithmetic midpoint of the active range - those two things only agree
+	// when the range is symmetric around zero. Locking to the arithmetic
+	// midpoint instead would make Bipolar mathematically identical to Normal
+	// mode for every range, which defeats the point of having a separate mode.
+	auto centre = 0.0;
+
+	if (centre <= parameterRange.start || centre >= parameterRange.end)
+		centre = (parameterRange.start + parameterRange.end) * 0.5; // 0 isn't in range: fall back to the midpoint
+
+	if (centre > parameterRange.start && centre < parameterRange.end)
+	{
+		parameterRange.setSkewForCentre(centre);
+		range.skew = parameterRange.skew;
+	}
+}
+
+MacroControlBroadcaster::MacroControlledParameterData::MappingMode MacroControlBroadcaster::MacroControlledParameterData::getMappingMode() const
+{
+	return mappingMode;
+}
+
+void MacroControlBroadcaster::MacroControlledParameterData::setRangeSkew(double newSkew)
+{
+	parameterRange.skew = jlimit(0.001, 100.0, newSkew);
+	range.skew = parameterRange.skew;
+}
+
+double MacroControlBroadcaster::MacroControlledParameterData::getRangeSkew() const
+{
+	return parameterRange.skew;
+}
+
+void MacroControlBroadcaster::MacroControlledParameterData::setUseTable(bool shouldUseTable)
+{
+	useTable = shouldUseTable;
+
+	if (useTable)
+		getTable();
+}
+
+bool MacroControlBroadcaster::MacroControlledParameterData::isUsingTable() const
+{
+	return useTable;
+}
+
+SampleLookupTable* MacroControlBroadcaster::MacroControlledParameterData::getTable()
+{
+	if (customTable == nullptr)
+		customTable = new SampleLookupTable();
+
+	return customTable;
+}
+#endif
 
 		
 
@@ -473,6 +572,21 @@ ValueTree MacroControlBroadcaster::MacroControlledParameterData::exportAsValueTr
 	v.setProperty("inverted", inverted, nullptr);
 	v.setProperty("readonly", readOnly, nullptr);
 	v.setProperty("converter", textConverter.toString(), nullptr);
+
+#if HISE_USE_UPDATED_MACROS
+	// only written when set so the format stays backward compatible
+	if (displayName.isNotEmpty())
+		v.setProperty("display_name", displayName, nullptr);
+
+	if (mappingMode != MappingMode::Normal)
+		v.setProperty("mapping_mode", (int)mappingMode, nullptr);
+
+	if (useTable && customTable != nullptr)
+	{
+		v.setProperty("use_table", true, nullptr);
+		v.setProperty("table_data", customTable->exportData(), nullptr);
+	}
+#endif
 
 	return v;
 }
@@ -497,6 +611,18 @@ void MacroControlBroadcaster::MacroControlledParameterData::restoreFromValueTree
     inverted = v.getProperty("inverted", false);
     readOnly = v.getProperty("readonly", true);
 	textConverter = ValueToTextConverter::fromString(v.getProperty("converter", ""));
+
+#if HISE_USE_UPDATED_MACROS
+	displayName = v.getProperty("display_name", "").toString();
+	mappingMode = (MappingMode)jlimit(0, (int)MappingMode::numMappingModes - 1, (int)v.getProperty("mapping_mode", 0));
+	useTable = v.getProperty("use_table", false);
+
+	if (v.hasProperty("table_data"))
+		getTable()->restoreData(v.getProperty("table_data").toString());
+
+	// self-heals presets saved under the old fold-based Bipolar semantics
+	updateBipolarSkew();
+#endif
 
     controlledProcessor = findProcessor(getMainController()->getMainSynthChain(), id);
 
