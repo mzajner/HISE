@@ -241,7 +241,8 @@ struct Slider: public Base,
 		 dcid::style, 
 		 dcid::showValuePopup,
          dcid::processorId,
-		 dcid::parameterId
+		 dcid::parameterId,
+		 dcid::enableMidiLearn
 		});
 
 		return sliderIds;
@@ -364,6 +365,17 @@ struct Slider: public Base,
 				auto s = new UnconnectedSlider(name);
 				setSlider(s);
 			}
+		}
+		if(id == dcid::enableMidiLearn)
+		{
+			// Without this a right-click reaches HiSlider::mouseDown ->
+			// enableMidiLearnWithPopup and opens a modal popup that cannot be
+			// suppressed from script. MacroControlledObject::canBeMidiLearned()
+			// gates that call, so one bool removes the hazard at the source.
+			if(auto mco = dynamic_cast<MacroControlledObject*>(this->slider.get()))
+				mco->setCanBeMidiLearned((bool)newValue);
+
+			return;
 		}
 		if(id == dcid::suffix)
 		{

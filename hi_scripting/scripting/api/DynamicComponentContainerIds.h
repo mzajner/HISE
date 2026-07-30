@@ -86,6 +86,7 @@ DECLARE_ID(showValuePopup);
 
 DECLARE_ID(processorId);
 DECLARE_ID(parameterId);
+DECLARE_ID(enableMidiLearn);
 
 DECLARE_ID(filmstripImage);
 DECLARE_ID(numStrips);

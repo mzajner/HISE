@@ -74,6 +74,7 @@ const Array<Identifier>& Helpers::getProperties()
 		showValuePopup,
 		processorId,
 		parameterId,
+		enableMidiLearn,
 		filmstripImage,
 		numStrips,
 		isVertical,
@@ -163,6 +164,8 @@ var Helpers::getDefaultValue(const Identifier& p)
 	defaultValues.set(showValuePopup, var(false));
 	defaultValues.set(processorId, var(""));
 	defaultValues.set(parameterId, var(""));
+	// true preserves the existing behaviour for content that never sets it.
+	defaultValues.set(enableMidiLearn, var(true));
 	defaultValues.set(filmstripImage, var(""));
 	defaultValues.set(numStrips, var(64));
 	defaultValues.set(isVertical, var(true));
